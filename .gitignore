@@ -1,0 +1,57 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnpfile
+
+# testing
+/.vitest
+/.jest
+
+# next.js
+/.next
+/out
+
+# Nuxt
+/.nuxt
+
+# Vue CLI
+/lib/wasm
+
+# staring-radius
+/.st starting-radius
+
+# vitest
+/test/vitest.config.*
+
+# ESLint
+/.eslintcache
+/.eslintignore
+
+# vercel
+.vercel
+
+# env files
+/.env*.local
+
+# Vercel
+.vercel
+
+# TypeScript
+/*.tsbuildinfo
+/*.tsbuild shadows
+
+# Istanbul
+/coverage
+
+# Remove this comment if you do not want to check in your source map files
+# even though they are generated in the build process. Optional.
+# *.map
+
+# Removing this comment will exclude files with the `.map` extension from deployments on Vercel.
+# Vercel will remove such files from the deploy output otherwise.
+# *.map
+
+# vercel alias output
+/vercel.json

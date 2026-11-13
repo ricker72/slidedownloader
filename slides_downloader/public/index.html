@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SlideDownloader - Descargador de Presentaciones</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='10' height='100' width='100'/><text x='50' y='68' text-anchor='middle' fill='white' font-size='40' font-weight='bold'>S</text></svg>">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="logo">
+          <svg viewBox="0 0 40 40" width="40" height="40">
+            <rect width="40" height="40" rx="10" fill="#2563EB"/>
+            <path d="M10 25 L14 19 L19 22 L25 15 L30 19 L34 15" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+
+        <div class="input-section">
+          <label for="url-input">URL de la presentación:</label>
+          <div class="input-group">
+            <div class="input-wrapper">
+              <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor">
+                <path d="M10 2a8 8 0 0 0-8 8c0 4.418 7 10 7 10s7-5.582 7-10A8 8 0 0 0 10 2zm0 14a6 6 0 0 1 0-12 6 6 0 0 1 0 12z"/>
+              </svg>
+              <input 
+                type="url" 
+                id="url-input" 
+                placeholder="Pega el enlace de la presentación aquí..." 
+                value="https://www.slideshare.net/slideshow/gusano-barrenador-42662468/42662468"
+                spellcheck="false"
+              >
+            </div>
+            <button id="paste-btn" class="btn btn-secondary">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
+                <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h5A1.5 1.5 0 0 1 15 3.5v13a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 7 16.5v-13z"/>
+                <path d="M9 12h6M9 16h6" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              Pegar
+            </button>
+
+        <div class="format-section">
+          <label>Formato de descarga:</label>
+          <div class="format-options">
+            <label class="format-option">
+              <input type="radio" name="format" value="pptx" checked>
+              <div class="format-card">
+                <div class="format-icon">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 8 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <line x1="10" y1="9" x2="8" y2="9"/>
+                  </svg>
+                </div>
+                <span class="format-name">PowerPoint</span>
+                <span class="format-ext">PPTX</span>
+              </div>
+            </label>
+            <label class="format-option">
+              <input type="radio" name="format" value="pdf">
+              <div class="format-card">
+                <div class="format-icon">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+
+        <div class="action-section">
+          <button id="download-btn" class="btn btn-primary btn-lg">
+            <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1zm1.5-4.5c-.828 0-1.5.672-1.5 1.5S6.172 10 7 10s1.5-.672 1.5-1.5S7.828 5.5 7 5.5zm0 10c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5 1.5-.672 1.5-1.5-.672-1.5-1.5-1.5zM7 6a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1z" clip-rule="evenodd"/>
+            </svg>
+            Descargar
+          </button>
+        </div>
+
+        <div class="status-section" id="status-section">
+          <div class="status-indicator" id="status-indicator">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">Listo para descargar</span>
+          </div>
+          <div id="status-detail" class="status-detail">
+            <p>Ingresa una URL y selecciona el formato para comenzar</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 SlideDownloader. Todos los derechos reservados.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
+                    <polyline points="14 2 14 8 8 8"/>
+                    <path d="M16 13H8a2 2 0 0 0-2 2v3h18v-3a2 2 0 0 0-2-2z"/>
+                    <polyline points="16 13 12 17 8 13"/>
+                  </svg>
+                </div>
+                <span class="format-name">PDF</span>
+                <span class="format-ext">PDF</span>
+              </div>
+            </label>
+            <label class="format-option">
+              <input type="radio" name="format" value="docx">
+              <div class="format-card">
+                <div class="format-icon">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 8 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <path d="M12 12v6M8 15h8"/>
+                  </svg>
+                </div>
+                <span class="format-name">Word</span>
+                <span class="format-ext">DOCX</span>
+              </div>
+            </label>
+          </div>
+        </div>
+            <button id="detect-btn" class="btn btn-outline">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
+                <path d="M10 2a8 8 0 0 0-8 8c0 4.418 7 10 7 10s7-5.582 7-10A8 8 0 0 0 10 2zm0 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/>
+              </svg>
+              Detectar
+            </button>
+          </div>
+          <p class="help-text">Puedes usar enlaces de: SlideShare, Speaker Deck, Slides.com, Google Slides, etc.</p>
+        </div>
+          <h1>SlideDownloader</h1>
+        </div>
+        <p class="subtitle">Descargador de presentaciones profesionales</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="card">
+        <div class="card-header">
+          <h2>Descargar Presentación</h2>
+          <p>Ingresa el enlace de la presentación y elige el formato de descarga</p>
+        </div>
