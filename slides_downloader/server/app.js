@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const { promisify } = require('util');
-const downloader = require('./utils/downloader');
+const downloader = require('../utils/downloader');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
