@@ -1,0 +1,1 @@
+{"headers":{"frameguard":"SAMEORIGIN","xframeoptions":"SAMEORIGIN"},"redirects":{"source":"/api/ping-slide","destination":"/api/ping?url=<query>"},"vercel":{"frameworkVersion":1}}}
