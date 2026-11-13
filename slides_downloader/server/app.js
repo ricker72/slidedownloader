@@ -11,12 +11,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'assets')));
 
-// Ruta principal
+ // Ruta principal
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// API: Verificar estado del servicio
+ // API: Verificar estado del servicio
 app.post('/api/ping', async (req, res) => {
   try {
     res.json({ 
@@ -28,7 +28,7 @@ app.post('/api/ping', async (req, res) => {
   }
 });
 
-// API: Descargar presentación
+ // API: Descargar presentación
 app.post('/api/download', async (req, res) => {
   try {
     const { url, format } = req.body;
@@ -80,7 +80,7 @@ app.post('/api/download', async (req, res) => {
   }
 });
 
-// API: Verificar URL de SlideShare (versión simplificada sin Puppeteer)
+ // API: Verificar URL de SlideShare (versión simplificada sin Puppeteer)
 app.post('/api/ping-slide', async (req, res) => {
   try {
     const { url } = req.body;
@@ -108,7 +108,7 @@ app.post('/api/ping-slide', async (req, res) => {
   }
 });
 
-// API: Subir archivo
+ // API: Subir archivo
 app.post('/api/upload', async (req, res) => {
   try {
     const { file, url, format } = req.body;
@@ -149,7 +149,7 @@ app.post('/api/upload', async (req, res) => {
   }
 });
 
-// Servir archivos descargados
+ // Servir archivos descargados
 app.get('/download/:filename', (req, res) => {
   const { filename } = req.params;
   const downloadDir = path.join(__dirname, '..', 'downloads');
@@ -163,15 +163,20 @@ app.get('/download/:filename', (req, res) => {
   res.download(filePath, filename);
 });
 
-// Ruta 404 para rutas no encontradas
+ // Ruta 404 para rutas no encontradas
 app.use((req, res) => {
   res.status(404).send('<h1>404 - Página no encontrada</h1>');
 });
 
-// Iniciar servidor
+ // Iniciar servidor (desactivado en Vercel)
+/*
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
   console.log(`📦 Panel de control: http://localhost:${PORT}`);
 });
+*/
 
-module.exports = app;
+ // Export as Vercel handler
+module.exports = (req, res) => {
+  app(req, res);
+};
