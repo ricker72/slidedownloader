@@ -1,18 +1,16 @@
 /**
- * Wrapper de serverless para Vercel.
- * Exporta la aplicación Express como handler por defecto de @vercel/node.
+ * Wrapper serverless para Vercel (@vercel/node).
+ * Exporta la aplicación Express como handler.
  *
- * Notas importantes para despliegue serverless:
- * - Playwright/Chromium NO funciona en serverless de Vercel sin capas personalizadas
- *   (falta de bibliotecas del sistema y peso excesivo). El endpoint /api/inspect
- *   requiere Chromium; en producción debe reemplazarse por una alternativa
- *   sin navegador o moverse a una función con contenedor personalizado.
- * - El sistema de archivos es de solo lectura excepto /tmp. Los archivos
- *   generados en downloads/ se pierden tras la respuesta.
- *   Para /download/:jobId/:filename usar Vercel Blob, S3 u otro almacenamiento
- *   externo, o devolver el archivo directamente desde /api/download.
+ * Limitaciones conocidas en Vercel:
+ * - Playwright/Chromium no funciona en funciones serverless estándar
+ *   (falta de bibliotecas del sistema y límite de tamaño).
+ *   El endpoint /api/inspect intenta primero un método "lite" (sin browser).
+ * - El sistema de archivos es de solo lectura excepto /tmp.
+ *   Los archivos generados se guardan en /tmp y se pierden al terminar la invocación.
+ *   Idealmente devolver el archivo en la misma respuesta o usar Vercel Blob / S3.
  */
 
-const app = require('./server/app.js');
+const app = require('../server/app.js');
 
 module.exports = app;

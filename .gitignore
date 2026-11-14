@@ -1,32 +1,43 @@
 # Dependencias
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.js
 
 # Testing
-/.vitest
-/.jest
-/coverage
+coverage/
+.vitest/
+.jest/
 
-# Frameworks (restos de la plantilla original)
-/.next
-/out
-/.nuxt
-/lib/wasm
+# Frameworks / restos
+.next/
+out/
+.nuxt/
 
-# ESLint
-/.eslintcache
-/.eslintignore
-
-# TypeScript
-/*.tsbuildinfo
+# ESLint / TypeScript
+.eslintcache
+*.tsbuildinfo
 
 # Vercel
 .vercel
 .vercelignore
 
 # Variables de entorno
-/.env*.local
+.env
+.env.*
+!.env.example
 
 # Archivos generados por la aplicación
-/slides_downloader/downloads/
+downloads/
+**/downloads/
+
+# Logs y SO
+*.log
+server_log.txt
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -3,13 +3,27 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer } = require('./services/slideshareService');
-const { buildPresentationPrompt, buildAnalysis } = require('./services/promptService');
+const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer } = require('../services/slideshareService');
+const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const publicDir = path.join(__dirname, 'public');
-const downloadsDir = path.join(__dirname, 'downloads');
+
+// En Vercel el sistema de archivos es de solo lectura excepto /tmp.
+// En local usamos la carpeta del proyecto.
+const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const publicDir = path.join(__dirname, '..', 'public');
+const downloadsDir = isVercel
+  ? path.join('/tmp', 'slidedownloader-downloads')
+  : path.join(__dirname, '..', 'downloads');
+
+if (!fs.existsSync(downloadsDir)) {
+  try {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+  } catch (err) {
+    console.warn('No se pudo crear downloadsDir:', err.message);
+  }
+}
 
 const DOWNLOAD_MIME_TYPES = {
   '.pdf': 'application/pdf',

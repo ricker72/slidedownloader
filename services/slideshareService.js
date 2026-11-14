@@ -9,7 +9,10 @@ const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } = require
 const { v4: uuidv4 } = require('uuid');
 
 const ROOT_DIR = path.join(__dirname, '..');
-const DOWNLOADS_DIR = path.join(ROOT_DIR, 'downloads');
+const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DOWNLOADS_DIR = isVercel
+  ? path.join('/tmp', 'slidedownloader-downloads')
+  : path.join(ROOT_DIR, 'downloads');
 const DEFAULT_TITLE = 'presentacion';
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
