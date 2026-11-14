@@ -3,7 +3,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer } = require('../services/slideshareService');
+const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, createPdfBuffer, createPptxBuffer, createDocxBuffer, createVariantBuffer, sanitizeFileName } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
 
 const app = express();
@@ -236,6 +236,106 @@ app.post('/api/download', async (req, res) => {
     // Los errores 4xx son peticiones inválidas; solo se registran los 5xx.
     if (status >= 500) {
       console.error('Error en /api/download:', error);
+    }
+
+    return res.status(status).json({
+      success: false,
+      error: error.message || 'Error al generar la descarga'
+    });
+  }
+});
+
+/**
+ * Descarga directa de archivo generado en memoria.
+ * Compatible con Vercel serverless (no usa sistema de archivos persistente).
+ * Uso: GET /api/download-file?url=...&format=pdf&quality=sd
+ */
+app.get('/api/download-file', async (req, res) => {
+  try {
+    const { url, format, quality } = req.query || {};
+
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'Se requiere una URL' });
+    }
+
+    const normalizedUrl = normalizeSlideShareUrl(url);
+    if (!normalizedUrl) {
+      return res.status(400).json({ success: false, error: 'URL inválida de SlideShare' });
+    }
+
+    const selectedFormat = String(format || 'pdf').toLowerCase();
+    if (!SUPPORTED_FORMATS.includes(selectedFormat)) {
+      return res.status(400).json({
+        success: false,
+        error: `Formato no soportado. Formatos disponibles: ${SUPPORTED_FORMATS.join(', ')}`
+      });
+    }
+
+    const selectedQuality = String(quality || 'sd').toLowerCase();
+    if (!['sd', 'hd'].includes(selectedQuality)) {
+      return res.status(400).json({ success: false, error: 'Calidad no soportada. Opciones: sd, hd' });
+    }
+
+    // Extraer imágenes de la presentación
+    let info = null;
+
+    try {
+      info = await extractPresentationInfoLite(normalizedUrl);
+    } catch (error) {
+      console.warn('Fetch directo falló en /api/download-file:', error.message);
+    }
+
+    const hasImages = info && info.imageUrls && info.imageUrls.length > 0;
+    const rendererConfigured = Boolean(process.env.RENDERER_URL);
+
+    if (!hasImages && rendererConfigured) {
+      try {
+        info = await extractPresentationInfoViaRenderer(normalizedUrl);
+      } catch (rendererError) {
+        console.warn('Renderizador externo falló en /api/download-file:', rendererError.message);
+      }
+    }
+
+    if (!info || !info.imageUrls || info.imageUrls.length === 0) {
+      return res.status(422).json({ success: false, error: 'No se encontraron imágenes válidas para descargar' });
+    }
+
+    const imageUrls = info.imageUrls.slice(0, 60);
+    const title = (info.title || DEFAULT_TITLE).replace(/[\r\n]+/g, ' ').trim() || DEFAULT_TITLE;
+
+    let buffer;
+    let extension;
+
+    if (selectedFormat === 'pdf') {
+      buffer = await createPdfBuffer(imageUrls, title, selectedQuality);
+      extension = '.pdf';
+    } else if (selectedFormat === 'pptx') {
+      buffer = await createPptxBuffer(imageUrls, title, selectedQuality);
+      extension = '.pptx';
+    } else if (selectedFormat === 'docx') {
+      buffer = await createDocxBuffer(imageUrls, title, selectedQuality);
+      extension = '.docx';
+    } else if (selectedFormat === 'ppsx' || selectedFormat === 'potx') {
+      buffer = await createVariantBuffer(imageUrls, title, selectedFormat, selectedQuality);
+      extension = `.${selectedFormat}`;
+    } else {
+      return res.status(400).json({ success: false, error: `Formato no soportado: ${selectedFormat}` });
+    }
+
+    const safeFileName = sanitizeFileName(title, extension);
+    const mimeType = DOWNLOAD_MIME_TYPES[extension] || 'application/octet-stream';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeFileName)}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    return res.send(buffer);
+  } catch (error) {
+    const status = error.status || 500;
+
+    if (status >= 500) {
+      console.error('Error en /api/download-file:', error);
     }
 
     return res.status(status).json({

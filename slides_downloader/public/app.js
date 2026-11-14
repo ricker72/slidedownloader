@@ -319,22 +319,18 @@ async function handleDownload() {
   setLoading(true);
 
   try {
-    const response = await fetch('/api/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, format: currentFormat, quality: currentQuality }),
+    const params = new URLSearchParams({
+      url,
+      format: currentFormat,
+      quality: currentQuality,
     });
 
-    const data = await readJson(response);
+    // En Vercel serverless no se puede guardar archivos en disco de forma persistente,
+    // así que el servidor genera el archivo en memoria y lo devuelve directamente
+    // como respuesta de descarga (Content-Disposition: attachment).
+    window.location.href = `/api/download-file?${params.toString()}`;
 
-    if (response.ok && data.success) {
-      showStatus('success', 'Descarga lista');
-      showDownloadLink(data, url);
-    } else {
-      const message = data.error || 'Error al procesar la descarga';
-      showStatus('error', message);
-      showErrorMessage(message);
-    }
+    showStatus('success', 'Descarga iniciada');
   } catch (error) {
     showStatus('error', 'Error de conexión');
     showErrorMessage('No se pudo contactar con el servidor.');

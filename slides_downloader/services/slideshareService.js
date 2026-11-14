@@ -2,7 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const { chromium } = require('playwright');
+
+// Chromium/Playwright solo se usa en el renderizador externo (renderer-service/),
+// no en el servidor principal de Vercel. Importación condicional para evitar
+// fallos en entornos donde playwright no esté instalado (p. ej. serverless).
+let chromium;
+try {
+  chromium = require('playwright').chromium;
+} catch (error) {
+  chromium = null;
+}
 const PDFDocument = require('pdfkit');
 const PptxGenJS = require('pptxgenjs');
 const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } = require('docx');
@@ -252,6 +261,10 @@ async function downloadBinary(url, redirectCount = 0) {
 }
 
 async function extractPresentationInfo(url) {
+  if (!chromium) {
+    throw new Error('Playwright/Chromium no está disponible en este entorno. Usa extractPresentationInfoLite o configura un renderizador externo (RENDERER_URL).');
+  }
+
   const browser = await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage']
@@ -497,6 +510,174 @@ async function extractPresentationInfoViaRenderer(url) {
     clearTimeout(timeout);
     throw error;
   }
+}
+
+/**
+ * Generar un PDF en memoria (Buffer) sin escribir a disco.
+ * Compatible con serverless (Vercel).
+ */
+async function createPdfBuffer(imageUrls, title, quality = 'sd') {
+  const validImages = [];
+  for (const imageUrl of imageUrls) {
+    try {
+      const buffer = await downloadImage(imageUrl, quality);
+      const mime = detectImageMime(buffer);
+
+      if (mime !== 'image/png' && mime !== 'image/jpeg') {
+        console.warn(`Imagen omitida en PDF (${mime || 'formato desconocido'}): ${imageUrl}`);
+        continue;
+      }
+
+      validImages.push(buffer);
+    } catch (error) {
+      console.warn(`No se pudo cargar la imagen ${imageUrl}:`, error.message);
+    }
+  }
+
+  const pdf = new PDFDocument({ size: 'A4', margin: 20 });
+  const chunks = [];
+  pdf.on('data', chunk => chunks.push(chunk));
+
+  if (!validImages.length) {
+    pdf.fontSize(18).text(title || DEFAULT_TITLE, { align: 'center' });
+    pdf.moveDown();
+    pdf.fontSize(12).text('No se encontraron imágenes válidas para generar este documento.', { align: 'center' });
+  } else {
+    for (let index = 0; index < validImages.length; index += 1) {
+      if (index > 0) pdf.addPage();
+      pdf.image(validImages[index], 20, 20, { fit: [pdf.page.width - 40, pdf.page.height - 60], align: 'center', valign: 'center' });
+    }
+  }
+
+  pdf.end();
+
+  return new Promise((resolve, reject) => {
+    pdf.on('end', () => resolve(Buffer.concat(chunks)));
+    pdf.on('error', reject);
+  });
+}
+
+/**
+ * Generar un PPTX en memoria (Buffer) sin escribir a disco.
+ * Compatible con serverless (Vercel).
+ */
+async function createPptxBuffer(imageUrls, title, quality = 'sd') {
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'SlideDownloader';
+  pptx.company = 'SlideDownloader';
+  pptx.subject = 'Presentation export';
+  pptx.title = title || DEFAULT_TITLE;
+
+  const validImages = [];
+  for (const imageUrl of imageUrls) {
+    try {
+      const buffer = await downloadImage(imageUrl, quality);
+      const mime = detectImageMime(buffer);
+
+      if (mime !== 'image/png' && mime !== 'image/jpeg') {
+        console.warn(`Imagen omitida en PPTX (${mime || 'formato desconocido'}): ${imageUrl}`);
+        continue;
+      }
+
+      validImages.push({ buffer, mime });
+    } catch (error) {
+      console.warn(`No se pudo descargar la imagen ${imageUrl}:`, error.message);
+    }
+  }
+
+  if (!validImages.length) {
+    const slide = pptx.addSlide();
+    slide.background = { color: 'FFFFFF' };
+    slide.addText(title || DEFAULT_TITLE, { x: 0.5, y: 0.5, w: 12, h: 0.5, fontSize: 24, bold: true, color: '000000' });
+    slide.addText('No se encontraron imágenes válidas para generar la presentación.', { x: 0.5, y: 1.5, w: 12, h: 1, fontSize: 16, color: '333333' });
+  } else {
+    for (const { buffer, mime } of validImages) {
+      const slide = pptx.addSlide();
+      slide.background = { color: 'FFFFFF' };
+      slide.addText(title || DEFAULT_TITLE, { x: 0.5, y: 0.2, w: 12, h: 0.5, fontSize: 18, bold: true, color: '111827' });
+      slide.addImage({ data: toDataUri(buffer, mime), x: 0.5, y: 0.8, w: 12.8, h: 6.8 });
+    }
+  }
+
+  return pptx.writeFile();
+}
+
+/**
+ * Generar un PPSX o POTX en memoria (Buffer) sin escribir a disco.
+ * Reescribe el tipo de contenido de [Content_Types].xml.
+ */
+async function createVariantBuffer(imageUrls, title, variant, quality = 'sd') {
+  const pptxBuffer = await createPptxBuffer(imageUrls, title, quality);
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(pptxBuffer);
+  const contentTypes = zip.file('[Content_Types].xml');
+
+  if (!contentTypes) {
+    throw new Error('No se encontró [Content_Types].xml en el PPTX generado');
+  }
+
+  const xml = await contentTypes.async('string');
+
+  if (!xml.includes(PPTX_CONTENT_TYPE)) {
+    throw new Error('El tipo de contenido del PPTX generado no es el esperado');
+  }
+
+  const targetContentType = PPTX_VARIANTS[variant];
+
+  if (!targetContentType) {
+    throw new Error(`Variante de PowerPoint no soportada: ${variant}`);
+  }
+
+  zip.file('[Content_Types].xml', xml.split(PPTX_CONTENT_TYPE).join(targetContentType));
+
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+/**
+ * Generar un DOCX en memoria (Buffer) sin escribir a disco.
+ * Compatible con serverless (Vercel).
+ */
+async function createDocxBuffer(imageUrls, title, quality = 'sd') {
+  const children = [
+    new Paragraph({
+      text: title || DEFAULT_TITLE,
+      heading: HeadingLevel.TITLE,
+      spacing: { after: 200 }
+    })
+  ];
+
+  const validImages = [];
+  for (const imageUrl of imageUrls) {
+    try {
+      const buffer = await downloadImage(imageUrl, quality);
+      const mime = detectImageMime(buffer);
+
+      if (mime !== 'image/png' && mime !== 'image/jpeg') {
+        console.warn(`Imagen omitida en DOCX (${mime || 'formato desconocido'}): ${imageUrl}`);
+        continue;
+      }
+
+      validImages.push({ buffer, mime });
+    } catch (error) {
+      console.warn(`No se pudo descargar la imagen ${imageUrl}:`, error.message);
+    }
+  }
+
+  for (let index = 0; index < validImages.length; index += 1) {
+    children.push(new Paragraph({ text: `Slide ${index + 1}`, heading: HeadingLevel.HEADING_2, spacing: { before: 120, after: 120 } }));
+    children.push(new Paragraph({
+      children: [new ImageRun({ data: validImages[index].buffer, transformation: { width: 500, height: 300 }})],
+      spacing: { after: 200 }
+    }));
+  }
+
+  if (!validImages.length) {
+    children.push(new Paragraph({ text: 'No se encontraron imágenes válidas para generar el documento.', spacing: { after: 200 } }));
+  }
+
+  const doc = new Document({ sections: [{ properties: {}, children }] });
+  return Packer.toBuffer(doc);
 }
 
 async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd') {
@@ -795,6 +976,10 @@ module.exports = {
   createPptxFromImages,
   createPdfFromImages,
   createDocxFromImages,
+  createPptxBuffer,
+  createPdfBuffer,
+  createDocxBuffer,
+  createVariantBuffer,
   convertPptxToVariant,
   detectImageMime,
   toDataUri,
