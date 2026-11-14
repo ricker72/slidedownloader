@@ -12,7 +12,17 @@ const PORT = process.env.PORT || 8080;
 // En Vercel el sistema de archivos es de solo lectura excepto /tmp.
 // En local usamos la carpeta del proyecto.
 const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-const publicDir = path.join(__dirname, '..', 'public');
+
+// Resolver public/ de forma robusta (local y Vercel serverless)
+const candidatePublicDirs = [
+  path.join(__dirname, '..', 'public'),
+  path.join(process.cwd(), 'public'),
+  path.join(__dirname, 'public'),
+];
+let publicDir = candidatePublicDirs.find((d) => {
+  try { return fs.existsSync(path.join(d, 'index.html')); } catch { return false; }
+}) || candidatePublicDirs[0];
+
 const downloadsDir = isVercel
   ? path.join('/tmp', 'slidedownloader-downloads')
   : path.join(__dirname, '..', 'downloads');
@@ -24,6 +34,10 @@ if (!fs.existsSync(downloadsDir)) {
     console.warn('No se pudo crear downloadsDir:', err.message);
   }
 }
+
+console.log('[SlideDownloader] publicDir =', publicDir, '| exists =', fs.existsSync(publicDir));
+console.log('[SlideDownloader] downloadsDir =', downloadsDir);
+console.log('[SlideDownloader] isVercel =', isVercel);
 
 const DOWNLOAD_MIME_TYPES = {
   '.pdf': 'application/pdf',
