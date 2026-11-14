@@ -596,23 +596,46 @@ async function extractPresentationInfoViaRenderer(url) {
   }
 }
 
-async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd') {
-  const validImages = [];
-  for (const imageUrl of imageUrls) {
-    try {
-      const buffer = await downloadImage(imageUrl, quality);
-      const mime = detectImageMime(buffer);
+/**
+ * Descarga las imágenes en paralelo (con límite) conservando el orden original.
+ * En Vercel, descargar decenas de diapositivas en serie puede agotar el tiempo
+ * máximo de ejecución de la función.
+ */
+async function downloadImagesConcurrently(imageUrls, quality, concurrency = 6) {
+  const list = Array.isArray(imageUrls) ? imageUrls : [];
+  const results = new Array(list.length).fill(null);
+  let cursor = 0;
 
-      // pdfkit solo admite PNG y JPEG.
-      if (mime !== 'image/png' && mime !== 'image/jpeg') {
-        console.warn(`Imagen omitida en PDF (${mime || 'formato desconocido'}): ${imageUrl}`);
-        continue;
+  const workers = Array.from({ length: Math.min(concurrency, list.length) }, async () => {
+    while (cursor < list.length) {
+      const index = cursor;
+      cursor += 1;
+
+      try {
+        const buffer = await downloadImage(list[index], quality);
+        results[index] = { url: list[index], buffer, mime: detectImageMime(buffer) };
+      } catch (error) {
+        console.warn(`No se pudo descargar la imagen ${list[index]}:`, error.message);
       }
-
-      validImages.push(buffer);
-    } catch (error) {
-      console.warn(`No se pudo cargar la imagen ${imageUrl}:`, error.message);
     }
+  });
+
+  await Promise.all(workers);
+  return results.filter(Boolean);
+}
+
+async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd') {
+  const downloaded = await downloadImagesConcurrently(imageUrls, quality);
+  const validImages = [];
+
+  // pdfkit solo admite PNG y JPEG.
+  for (const { url, buffer, mime } of downloaded) {
+    if (mime !== 'image/png' && mime !== 'image/jpeg') {
+      console.warn(`Imagen omitida en PDF (${mime || 'formato desconocido'}): ${url}`);
+      continue;
+    }
+
+    validImages.push(buffer);
   }
 
   const pdf = new PDFDocument({ size: 'A4', margin: 20 });
@@ -652,22 +675,17 @@ async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd'
   pptx.subject = 'Presentation export';
   pptx.title = title || DEFAULT_TITLE;
 
+  const downloaded = await downloadImagesConcurrently(imageUrls, quality);
   const validImages = [];
-  for (const imageUrl of imageUrls) {
-    try {
-      const buffer = await downloadImage(imageUrl, quality);
-      const mime = detectImageMime(buffer);
 
-      // pptxgenjs + PowerPoint admiten de forma fiable PNG y JPEG.
-      if (mime !== 'image/png' && mime !== 'image/jpeg') {
-        console.warn(`Imagen omitida en PPTX (${mime || 'formato desconocido'}): ${imageUrl}`);
-        continue;
-      }
-
-      validImages.push({ url: imageUrl, buffer, mime });
-    } catch (error) {
-      console.warn(`No se pudo descargar la imagen ${imageUrl}:`, error.message);
+  // pptxgenjs + PowerPoint admiten de forma fiable PNG y JPEG.
+  for (const { url, buffer, mime } of downloaded) {
+    if (mime !== 'image/png' && mime !== 'image/jpeg') {
+      console.warn(`Imagen omitida en PPTX (${mime || 'formato desconocido'}): ${url}`);
+      continue;
     }
+
+    validImages.push({ url, buffer, mime });
   }
 
   if (!validImages.length) {
@@ -705,22 +723,17 @@ async function createDocxFromImages(imageUrls, outputPath, title, quality = 'sd'
     })
   ];
 
+  const downloaded = await downloadImagesConcurrently(imageUrls, quality);
   const validImages = [];
-  for (const imageUrl of imageUrls) {
-    try {
-      const buffer = await downloadImage(imageUrl, quality);
-      const mime = detectImageMime(buffer);
 
-      // docx solo admite imágenes PNG y JPEG de forma fiable.
-      if (mime !== 'image/png' && mime !== 'image/jpeg') {
-        console.warn(`Imagen omitida en DOCX (${mime || 'formato desconocido'}): ${imageUrl}`);
-        continue;
-      }
-
-      validImages.push({ url: imageUrl, buffer, mime });
-    } catch (error) {
-      console.warn(`No se pudo descargar la imagen ${imageUrl}:`, error.message);
+  // docx solo admite imágenes PNG y JPEG de forma fiable.
+  for (const { url, buffer, mime } of downloaded) {
+    if (mime !== 'image/png' && mime !== 'image/jpeg') {
+      console.warn(`Imagen omitida en DOCX (${mime || 'formato desconocido'}): ${url}`);
+      continue;
     }
+
+    validImages.push({ url, buffer, mime });
   }
 
   for (let index = 0; index < validImages.length; index += 1) {
