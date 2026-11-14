@@ -86,7 +86,17 @@ app.use(helmet({
 }));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(publicDir, { maxAge: '1h', etag: true }));
+app.use(express.static(publicDir, {
+  maxAge: '1h',
+  etag: true,
+  index: false,
+  setHeaders: (res, filePath) => {
+    // El HTML se revalida siempre; los assets siguen con caché de 1 hora.
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }
+}));
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
