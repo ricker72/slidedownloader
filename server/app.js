@@ -3,8 +3,10 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
+const { Readable } = require('stream');
 const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
+const { searchPresentations, buildGoogleUrl, normalizeTopic } = require('../services/presentationSearch');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -46,6 +48,100 @@ const DOWNLOAD_MIME_TYPES = {
   '.potx': 'application/vnd.openxmlformats-officedocument.presentationml.template',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 };
+
+// Archivos que el buscador puede descargar a través del proxy.
+const DIRECT_FILE_MIME_TYPES = {
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.pdf': 'application/pdf'
+};
+
+const DOWNLOAD_PROXY_MAX_BYTES = 40 * 1024 * 1024;
+const DOWNLOAD_PROXY_TIMEOUT = 25 * 1000;
+const DOWNLOAD_PROXY_HEADERS = {
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  accept: 'application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,*/*;q=0.8',
+  'accept-language': 'es-MX,es;q=0.9'
+};
+
+function isPrivateHostname(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true;
+
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    const [a, b] = host.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+
+  return host === '::1' || /^f[cd][0-9a-f]{2}:/i.test(host) || /^fe80:/i.test(host);
+}
+
+function parseDirectFileUrl(raw) {
+  let parsed;
+
+  try {
+    parsed = new URL(String(raw || ''));
+  } catch {
+    return null;
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  if (isPrivateHostname(parsed.hostname)) return null;
+
+  const extension = path.extname(parsed.pathname).toLowerCase();
+  if (!DIRECT_FILE_MIME_TYPES[extension]) return null;
+
+  return { url: parsed.href, extension, mime: DIRECT_FILE_MIME_TYPES[extension] };
+}
+
+function buildProxyFileName(fileUrl, extension) {
+  let name = '';
+
+  try {
+    name = decodeURIComponent(new URL(fileUrl).pathname.split('/').pop() || '');
+  } catch {
+    name = '';
+  }
+
+  name = name
+    .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+
+  if (!new RegExp(`\\${extension}$`, 'i').test(name)) {
+    name = `presentacion${extension}`;
+  }
+
+  return name || `presentacion${extension}`;
+}
+
+function sendDownloadError(res, message, sourceUrl = '') {
+  const safeMessage = String(message || 'No se pudo descargar el archivo')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const safeUrl = String(sourceUrl || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return res.status(502).type('html').send(`<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No se pudo descargar</title>
+<style>body{font-family:Segoe UI,system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px}
+main{max-width:460px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;box-shadow:0 18px 50px -30px rgba(15,23,42,.4)}
+h1{font-size:20px;margin:0 0 8px}p{color:#64748b;line-height:1.6;margin:0 0 18px}
+a{display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;border-radius:10px;text-decoration:none;font-weight:600}small{display:block;margin-top:14px;color:#94a3b8;word-break:break-all}</style>
+</head><body><main><h1>No se pudo descargar automáticamente</h1>
+<p>${safeMessage}. Puedes abrir el archivo original y guardarlo desde tu navegador.</p>
+${safeUrl ? `<a href="${safeUrl}" rel="noopener">Abrir archivo original</a><small>${safeUrl}</small>` : ''}
+</main></body></html>`);
+}
+
 
 // La detección tarda varios segundos (renderizador). Guardar el resultado unos
 // minutos permite descargar sin repetirla, incluso si la vista previa aún no
@@ -123,6 +219,123 @@ app.get('/google', (req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(publicDir, 'google.html'));
 });
+
+app.get('/filtro', (req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(publicDir, 'google.html'));
+});
+
+app.get('/api/search', async (req, res) => {
+  const topic = normalizeTopic(req.query.q || req.query.tema || '');
+  const formats = req.query.formats || req.query.formato || '';
+
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    const payload = await searchPresentations({ topic, formats });
+    return res.json({ success: true, ...payload });
+  } catch (error) {
+    const status = error.status || 500;
+
+    if (status >= 500) {
+      console.warn('Error en /api/search:', error.message);
+    }
+
+    return res.status(status).json({
+      success: false,
+      error: error.message || 'No se pudo completar la búsqueda',
+      googleUrl: buildGoogleUrl(topic, error.formats)
+    });
+  }
+});
+
+app.get('/api/file', async (req, res) => {
+  const target = parseDirectFileUrl(req.query.url);
+
+  if (!target) {
+    return res.status(400).json({
+      success: false,
+      error: 'Solo se pueden descargar archivos .ppt, .pptx o .pdf públicos'
+    });
+  }
+
+  const fileName = buildProxyFileName(target.url, target.extension);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_PROXY_TIMEOUT);
+
+  try {
+    const upstream = await fetch(target.url, {
+      headers: DOWNLOAD_PROXY_HEADERS,
+      redirect: 'follow',
+      signal: controller.signal
+    });
+
+    if (!upstream.ok) {
+      clearTimeout(timer);
+      return sendDownloadError(res, `El servidor del archivo respondió ${upstream.status}`, target.url);
+    }
+
+    const contentType = String(upstream.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('text/html')) {
+      clearTimeout(timer);
+      return sendDownloadError(res, 'El enlace abrió una página en lugar del archivo', target.url);
+    }
+
+    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    if (contentLength > DOWNLOAD_PROXY_MAX_BYTES) {
+      clearTimeout(timer);
+      return res.redirect(302, target.url);
+    }
+
+    res.status(200);
+    res.setHeader('Content-Type', target.mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(fileName).replace(/'/g, '%27')}`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    if (contentLength) {
+      res.setHeader('Content-Length', String(contentLength));
+    }
+
+    if (req.method === 'HEAD' || !upstream.body) {
+      clearTimeout(timer);
+      return res.end();
+    }
+
+    const stream = Readable.fromWeb(upstream.body);
+
+    stream.on('error', (error) => {
+      console.warn('Error al transmitir descarga:', error.message);
+      if (!res.headersSent) {
+        sendDownloadError(res, 'La descarga se interrumpió', target.url);
+      } else {
+        res.destroy(error);
+      }
+    });
+
+    res.on('close', () => {
+      clearTimeout(timer);
+      controller.abort();
+      stream.destroy();
+    });
+
+    stream.pipe(res);
+    return undefined;
+  } catch (error) {
+    clearTimeout(timer);
+
+    if (res.headersSent) {
+      return res.destroy(error);
+    }
+
+    const message = error.name === 'AbortError'
+      ? 'El servidor del archivo tardó demasiado en responder'
+      : 'No se pudo conectar con el servidor del archivo';
+
+    return sendDownloadError(res, message, target.url);
+  }
+});
+
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

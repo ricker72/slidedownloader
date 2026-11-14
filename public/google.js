@@ -1,319 +1,581 @@
 const FORMAT_ORDER = ['pptx', 'ppt', 'pdf'];
-const DEFAULT_FORMATS = ['pptx', 'ppt'];
-const EXCLUDED_SITES = [
-  '-site:studocu.com',
-  '-site:scribd.com',
-  '-site:coursehero.com',
-  '-site:docsity.com',
-  '-site:brainly.com',
-];
-
-const SCOPES = {
-  all: '',
-  edu: '(site:.edu OR site:.edu.mx)',
-  gob: 'site:.gob.mx',
-};
+const DEFAULT_FORMATS = [...FORMAT_ORDER];
+const MIN_TOPIC_LENGTH = 2;
 
 const topicInput = document.getElementById('topic-input');
 const searchBtn = document.getElementById('search-btn');
-const copyBtn = document.getElementById('copy-btn');
-const queryPreview = document.getElementById('query-preview');
-const feedback = document.getElementById('query-feedback');
 const formatChips = [...document.querySelectorAll('#format-chips .chip')];
-const scopeChips = [...document.querySelectorAll('#scope-chips .chip')];
 const topicChips = [...document.querySelectorAll('#topic-chips .chip')];
-const exactToggle = document.getElementById('opt-exact');
-const excludeToggle = document.getElementById('opt-exclude');
-const shortcutCards = [...document.querySelectorAll('.shortcut-card')];
+const searchNote = document.getElementById('search-note');
+const resultsHead = document.getElementById('results-head');
+const resultsSummary = document.getElementById('results-summary');
+const resultsState = document.getElementById('results-state');
+const resultsGrid = document.getElementById('results-grid');
+const googleLink = document.getElementById('google-link');
+
+const previewDialog = document.getElementById('preview-dialog');
+const previewBadge = document.getElementById('preview-badge');
+const previewTitle = document.getElementById('preview-dialog-title');
+const previewDomain = document.getElementById('preview-domain');
+const previewFrame = document.getElementById('preview-frame');
+const previewLoading = document.getElementById('preview-loading');
+const previewHint = document.getElementById('preview-hint');
+const previewOpen = document.getElementById('preview-open');
+const previewDownload = document.getElementById('preview-download');
+const previewClose = document.getElementById('preview-close');
 
 const state = {
+  topic: '',
   formats: [...DEFAULT_FORMATS],
-  scope: 'all',
-  exact: false,
-  exclude: true,
+  results: [],
+  googleUrl: '',
+  lastPayload: null,
+  loading: false,
+  requestId: 0,
+  controller: null,
+  previewTimer: null,
 };
 
-let feedbackTimer = null;
+let noteTimer = null;
 
-/**
- * Normalizar el tema: sin espacios repetidos ni comillas sueltas.
- */
 function cleanTopic(value) {
   return String(value || '')
     .replace(/["“”]/g, '')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .slice(0, 120);
 }
 
-/**
- * Construir la búsqueda de Google con los filtros activos.
- */
-function buildQuery(topic) {
-  const formats = FORMAT_ORDER.filter((format) => state.formats.includes(format));
-  const typePart = formats.length === 1
-    ? `filetype:${formats[0]}`
-    : `(${formats.map((format) => `filetype:${format}`).join(' OR ')})`;
+function createIcon(name, className = 'icon') {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', className);
+  svg.setAttribute('aria-hidden', 'true');
 
-  const clean = cleanTopic(topic);
-  const topicPart = clean ? (state.exact ? `"${clean}"` : clean) : '';
-  const scopePart = SCOPES[state.scope] || '';
-  const excludePart = state.exclude ? EXCLUDED_SITES.join(' ') : '';
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#${name}`);
+  svg.append(use);
 
-  return [typePart, topicPart, scopePart, excludePart].filter(Boolean).join(' ');
+  return svg;
 }
 
-/**
- * Pintar la búsqueda resaltando los operadores de Google.
- */
-function renderQueryPreview(query, hasTopic) {
-  queryPreview.textContent = '';
+function formatLabel(format) {
+  return String(format || '').toUpperCase();
+}
 
-  const append = (text, className) => {
-    if (!text) return;
-    if (className) {
-      const span = document.createElement('span');
-      span.className = className;
-      span.textContent = text;
-      queryPreview.append(span);
-      return;
-    }
-    queryPreview.append(document.createTextNode(text));
-  };
+function downloadUrlFor(url) {
+  return `/api/file?url=${encodeURIComponent(url)}`;
+}
 
-  const tokens = query.split(' ');
-
-  tokens.forEach((token, index) => {
-    if (index > 0) append(' ');
-
-    // Separar paréntesis/comas finales para que el resaltado no los incluya.
-    const parts = token.match(/^(.*?)([),]*)$/);
-    const core = parts ? parts[1] : token;
-    const tail = parts ? parts[2] : '';
-
-    if (core.startsWith('filetype:')) {
-      append(core, 'query-token');
-    } else if (core.startsWith('-site:')) {
-      append(core, 'query-exclude');
-    } else if (core.startsWith('site:') || core === 'OR') {
-      append(core, 'query-scope');
-    } else {
-      append(core);
-    }
-
-    append(tail);
-  });
-
-  if (!hasTopic) {
-    append(' tu tema', 'query-muted');
+function previewUrlFor(item) {
+  if (item.format === 'pdf') {
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(item.url)}&embedded=true`;
   }
+
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(item.url)}`;
 }
 
-/**
- * Sincronizar el estado con la barra de direcciones para poder compartirlo.
- */
-function syncUrl(topic) {
+function showNote(message, tone = 'info') {
+  clearTimeout(noteTimer);
+  searchNote.textContent = message;
+  searchNote.dataset.tone = tone;
+  searchNote.hidden = false;
+
+  noteTimer = setTimeout(() => {
+    searchNote.hidden = true;
+  }, 4200);
+}
+
+function syncUrl(topic = state.topic) {
   const params = new URLSearchParams();
 
-  if (cleanTopic(topic)) params.set('tema', cleanTopic(topic));
+  if (topic) params.set('tema', topic);
   if (state.formats.join(',') !== DEFAULT_FORMATS.join(',')) {
     params.set('formato', state.formats.join(','));
   }
-  if (state.scope !== 'all') params.set('ambito', state.scope);
 
   const query = params.toString();
-  const nextUrl = query ? `${location.pathname}?${query}` : location.pathname;
-  history.replaceState(null, '', nextUrl);
+  history.replaceState(null, '', query ? `${location.pathname}?${query}` : location.pathname);
 }
 
-/**
- * Actualizar la vista previa y el estado visual de los filtros.
- */
-function refresh() {
-  const topic = cleanTopic(topicInput.value);
-  const query = buildQuery(topic);
-
-  renderQueryPreview(query, Boolean(topic));
-  searchBtn.disabled = !topic;
-
+function refreshFormatChips() {
   for (const chip of formatChips) {
     const active = state.formats.includes(chip.dataset.format);
     chip.classList.toggle('active', active);
     chip.setAttribute('aria-pressed', String(active));
   }
-
-  for (const chip of scopeChips) {
-    const active = chip.dataset.scope === state.scope;
-    chip.classList.toggle('active', active);
-    chip.setAttribute('aria-pressed', String(active));
-  }
-
-  syncUrl(topic);
 }
 
-/**
- * Mostrar un aviso breve bajo la búsqueda.
- */
-function showFeedback(message) {
-  clearTimeout(feedbackTimer);
-  feedback.textContent = message;
-
-  feedbackTimer = setTimeout(() => {
-    feedback.textContent = '';
-  }, 2600);
-}
-
-/**
- * Abrir Google con la búsqueda generada.
- */
-function openSearch(topicOverride) {
-  const topic = cleanTopic(topicOverride != null ? topicOverride : topicInput.value);
-
-  if (!topic) {
-    showFeedback('Escribe primero un tema');
-    topicInput.focus();
-    return;
-  }
-
-  const url = `https://www.google.com/search?q=${encodeURIComponent(buildQuery(topic))}&hl=es`;
-  const win = window.open(url, '_blank', 'noopener,noreferrer');
-
-  if (!win) {
-    location.href = url;
+function setGoogleLink(url) {
+  if (url) {
+    googleLink.href = url;
+  } else {
+    const typePart = state.formats.length === 1
+      ? `filetype:${state.formats[0]}`
+      : `(${state.formats.map((format) => `filetype:${format}`).join(' OR ')})`;
+    googleLink.href = `https://www.google.com/search?q=${encodeURIComponent(`${typePart} ${state.topic}`.trim())}&hl=es`;
   }
 }
 
-/**
- * Copiar la búsqueda al portapapeles.
- */
-async function copyQuery() {
-  const topic = cleanTopic(topicInput.value);
+function clearNode(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
 
-  if (!topic) {
-    showFeedback('Escribe primero un tema');
-    topicInput.focus();
-    return;
+function createStateAction({ label, href, icon, variant = 'primary', onClick }) {
+  const element = href ? document.createElement('a') : document.createElement('button');
+
+  element.className = `btn btn-sm ${variant === 'primary' ? 'btn-primary' : 'btn-ghost'}`;
+  if (href) {
+    element.href = href;
+    element.target = '_blank';
+    element.rel = 'noopener noreferrer';
+  } else {
+    element.type = 'button';
+    if (onClick) element.addEventListener('click', onClick);
   }
 
-  const query = buildQuery(topic);
+  if (icon) element.append(createIcon(icon));
+  element.append(document.createTextNode(label));
 
-  try {
-    await navigator.clipboard.writeText(query);
-    showFeedback('Búsqueda copiada');
-  } catch (error) {
-    const helper = document.createElement('textarea');
-    helper.value = query;
-    helper.setAttribute('readonly', '');
-    helper.style.position = 'fixed';
-    helper.style.opacity = '0';
-    document.body.append(helper);
-    helper.select();
+  return element;
+}
 
-    try {
-      document.execCommand('copy');
-      showFeedback('Búsqueda copiada');
-    } catch (copyError) {
-      showFeedback('No se pudo copiar');
+function renderState({ icon = 'i-search', title, text, actions = [], tone = 'neutral' }) {
+  clearNode(resultsState);
+  resultsState.hidden = false;
+  resultsState.dataset.tone = tone;
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'results-state-icon';
+  iconWrap.setAttribute('aria-hidden', 'true');
+  iconWrap.append(createIcon(icon));
+  resultsState.append(iconWrap);
+
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+  resultsState.append(heading);
+
+  if (text) {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    resultsState.append(paragraph);
+  }
+
+  if (actions.length) {
+    const actionRow = document.createElement('div');
+    actionRow.className = 'results-state-actions';
+    actionRow.append(...actions);
+    resultsState.append(actionRow);
+  }
+}
+
+function renderInitialState() {
+  resultsGrid.hidden = true;
+  clearNode(resultsGrid);
+  resultsSummary.textContent = 'Escribe un tema para ver presentaciones.';
+  setGoogleLink('');
+  renderState({
+    icon: 'i-search',
+    title: 'Busca un tema para empezar',
+    text: 'Verás archivos reales con vista previa, enlace directo y botón de descarga.',
+  });
+}
+
+function renderSkeletons() {
+  resultsState.hidden = true;
+  resultsGrid.hidden = false;
+  clearNode(resultsGrid);
+
+  for (let index = 0; index < 6; index += 1) {
+    const card = document.createElement('article');
+    card.className = 'result-card result-card--skeleton';
+    card.setAttribute('aria-hidden', 'true');
+
+    const preview = document.createElement('div');
+    preview.className = 'result-preview skeleton-block';
+
+    const body = document.createElement('div');
+    body.className = 'result-body';
+
+    for (const width of ['38%', '82%', '64%', '48%']) {
+      const line = document.createElement('span');
+      line.className = 'skeleton-line';
+      line.style.width = width;
+      body.append(line);
     }
 
-    helper.remove();
+    card.append(preview, body);
+    resultsGrid.append(card);
   }
 }
 
-/**
- * Activar o desactivar un formato, sin permitir que quede ninguno.
- */
+function createResultCard(item, index) {
+  const card = document.createElement('article');
+  card.className = 'result-card';
+
+  const previewButton = document.createElement('button');
+  previewButton.type = 'button';
+  previewButton.className = `result-preview result-preview--${item.format}`;
+  previewButton.addEventListener('click', () => openPreview(item));
+
+  const rank = document.createElement('span');
+  rank.className = 'result-rank';
+  rank.textContent = String(index + 1).padStart(2, '0');
+
+  const fileIcon = document.createElement('span');
+  fileIcon.className = 'result-preview-file';
+  fileIcon.append(createIcon(`i-${item.format === 'pdf' ? 'pdf' : 'pptx'}`, 'format-svg'));
+
+  const extension = document.createElement('span');
+  extension.className = 'result-preview-ext';
+  extension.textContent = formatLabel(item.format);
+
+  const previewCta = document.createElement('span');
+  previewCta.className = 'result-preview-cta';
+  previewCta.append(createIcon('i-eye'));
+  previewCta.append(document.createTextNode('Vista previa'));
+
+  const accessibleTitle = document.createElement('span');
+  accessibleTitle.className = 'sr-only';
+  accessibleTitle.textContent = `: ${item.title}`;
+
+  previewButton.append(rank, fileIcon, extension, previewCta, accessibleTitle);
+
+  const body = document.createElement('div');
+  body.className = 'result-body';
+
+  const meta = document.createElement('div');
+  meta.className = 'result-meta';
+
+  const domain = document.createElement('span');
+  domain.className = 'result-domain';
+  domain.textContent = item.domain;
+  domain.title = item.domain;
+
+  const badge = document.createElement('span');
+  badge.className = `format-badge format-badge--${item.format}`;
+  badge.textContent = formatLabel(item.format);
+
+  meta.append(domain, badge);
+
+  const title = document.createElement('h3');
+  title.className = 'result-title';
+  title.textContent = item.title;
+  title.title = item.title;
+
+  const pathLine = document.createElement('p');
+  pathLine.className = 'result-path';
+  pathLine.textContent = item.path;
+  pathLine.title = item.url;
+
+  body.append(meta, title, pathLine);
+
+  if (item.snippet) {
+    const snippet = document.createElement('p');
+    snippet.className = 'result-snippet';
+    snippet.textContent = item.snippet;
+    body.append(snippet);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'result-actions';
+
+  const viewLink = document.createElement('a');
+  viewLink.className = 'btn btn-sm btn-ghost';
+  viewLink.href = item.url;
+  viewLink.target = '_blank';
+  viewLink.rel = 'noopener noreferrer';
+  viewLink.append(createIcon('i-external'));
+  viewLink.append(document.createTextNode('Ver'));
+
+  const downloadLink = document.createElement('a');
+  downloadLink.className = 'btn btn-sm btn-primary';
+  downloadLink.href = downloadUrlFor(item.url);
+  downloadLink.target = '_blank';
+  downloadLink.rel = 'noopener noreferrer';
+  downloadLink.setAttribute('download', item.fileName || '');
+  downloadLink.append(createIcon('i-download'));
+  downloadLink.append(document.createTextNode('Descargar'));
+  downloadLink.addEventListener('click', () => {
+    showNote(`Iniciando descarga de ${item.fileName || item.title}`);
+  });
+
+  actions.append(viewLink, downloadLink);
+  body.append(actions);
+  card.append(previewButton, body);
+
+  return card;
+}
+
+function renderResults(payload) {
+  const results = Array.isArray(payload.results) ? payload.results : [];
+
+  resultsState.hidden = true;
+  clearNode(resultsGrid);
+  clearNode(resultsState);
+
+  if (!results.length) {
+    resultsGrid.hidden = true;
+    resultsSummary.textContent = `Sin archivos para «${payload.topic}».`;
+    setGoogleLink(payload.googleUrl);
+    renderState({
+      icon: 'i-alert',
+      tone: 'empty',
+      title: `No encontramos archivos para «${payload.topic}»`,
+      text: 'Prueba con otras palabras, revisa la ortografía o activa más formatos. También puedes continuar la búsqueda en Google.',
+      actions: [
+        createStateAction({ label: 'Abrir búsqueda en Google', href: payload.googleUrl, icon: 'i-external' }),
+        createStateAction({
+          label: 'Probar con otro tema',
+          icon: 'i-search',
+          variant: 'ghost',
+          onClick: () => {
+            topicInput.value = '';
+            topicInput.focus();
+          },
+        }),
+      ],
+    });
+    return;
+  }
+
+  const counts = results.reduce((accumulator, item) => {
+    accumulator[item.format] = (accumulator[item.format] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const countText = FORMAT_ORDER
+    .filter((format) => counts[format])
+    .map((format) => `${counts[format]} ${formatLabel(format)}`)
+    .join(' · ');
+
+  resultsSummary.textContent = `${results.length} ${results.length === 1 ? 'archivo' : 'archivos'} para «${payload.topic}» · ${countText}`;
+  setGoogleLink(payload.googleUrl);
+  resultsGrid.hidden = false;
+
+  const fragment = document.createDocumentFragment();
+  results.forEach((item, index) => fragment.append(createResultCard(item, index)));
+  resultsGrid.append(fragment);
+
+  if (payload.partial) {
+    showNote('Algunos formatos no respondieron. Los resultados disponibles ya aparecen abajo.', 'warning');
+  }
+}
+
+function renderError(topic, message, googleUrl) {
+  resultsGrid.hidden = true;
+  clearNode(resultsGrid);
+  resultsSummary.textContent = `No se pudo buscar «${topic}».`;
+  setGoogleLink(googleUrl);
+  renderState({
+    icon: 'i-alert',
+    tone: 'error',
+    title: 'No pudimos completar la búsqueda',
+    text: message || 'Revisa tu conexión e inténtalo de nuevo.',
+    actions: [
+      createStateAction({
+        label: 'Reintentar',
+        icon: 'i-refresh',
+        onClick: () => runSearch(),
+      }),
+      createStateAction({ label: 'Buscar en Google', href: googleUrl, icon: 'i-external', variant: 'ghost' }),
+    ],
+  });
+}
+
+async function runSearch() {
+  const topic = cleanTopic(topicInput.value);
+
+  if (topic.length < MIN_TOPIC_LENGTH) {
+    showNote('Escribe un tema de al menos 2 caracteres.', 'warning');
+    topicInput.focus();
+    return;
+  }
+
+  if (!state.formats.length) {
+    state.formats = [...DEFAULT_FORMATS];
+    refreshFormatChips();
+  }
+
+  state.topic = topic;
+  state.loading = true;
+  state.requestId += 1;
+  const requestId = state.requestId;
+
+  if (state.controller) state.controller.abort();
+  state.controller = new AbortController();
+
+  syncUrl(topic);
+  resultsSummary.textContent = `Buscando archivos para «${topic}»…`;
+  resultsHead.hidden = false;
+  renderSkeletons();
+
+  try {
+    const formats = state.formats.join(',');
+    const response = await fetch(`/api/search?q=${encodeURIComponent(topic)}&formats=${encodeURIComponent(formats)}`, {
+      signal: state.controller.signal,
+      headers: { accept: 'application/json' },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (requestId !== state.requestId) return;
+
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.error || 'El buscador no respondió. Intenta de nuevo.');
+    }
+
+    state.results = payload.results || [];
+    state.googleUrl = payload.googleUrl || '';
+    state.lastPayload = payload;
+    renderResults(payload);
+  } catch (error) {
+    if (error.name === 'AbortError' || requestId !== state.requestId) return;
+
+    state.results = [];
+    state.googleUrl = '';
+    renderError(topic, error.message, '');
+  } finally {
+    if (requestId === state.requestId) {
+      state.loading = false;
+    }
+  }
+}
+
 function toggleFormat(format) {
   if (state.formats.includes(format)) {
     if (state.formats.length === 1) {
-      showFeedback('Deja al menos un formato activo');
+      showNote('Deja al menos un formato activo.', 'warning');
       return;
     }
     state.formats = state.formats.filter((value) => value !== format);
   } else {
-    state.formats.push(format);
+    state.formats = FORMAT_ORDER.filter((value) => state.formats.includes(value) || value === format);
   }
 
-  refresh();
+  refreshFormatChips();
+  setGoogleLink('');
+  syncUrl();
+
+  if (state.topic && cleanTopic(topicInput.value) === state.topic) {
+    runSearch();
+  }
 }
 
-/**
- * Aplicar un formato único desde los atajos y buscar.
- */
-function useShortcut(format) {
-  state.formats = [format];
-  refresh();
+function openPreview(item) {
+  clearTimeout(state.previewTimer);
+  previewFrame.dataset.loaded = 'false';
+  previewLoading.hidden = false;
+  previewHint.hidden = true;
+  previewBadge.textContent = formatLabel(item.format);
+  previewBadge.className = `preview-badge format-badge--${item.format}`;
+  previewTitle.textContent = item.title;
+  previewTitle.title = item.title;
+  previewDomain.textContent = item.domain;
+  previewOpen.href = item.url;
+  previewDownload.href = downloadUrlFor(item.url);
+  previewDownload.setAttribute('download', item.fileName || '');
+  previewFrame.src = previewUrlFor(item);
 
-  if (cleanTopic(topicInput.value)) {
-    openSearch();
+  if (typeof previewDialog.showModal === 'function') {
+    previewDialog.showModal();
   } else {
-    showFeedback('Ahora escribe el tema y pulsa Buscar');
-    topicInput.focus();
+    previewDialog.setAttribute('open', '');
   }
+
+  document.body.classList.add('preview-open');
+
+  state.previewTimer = setTimeout(() => {
+    if (previewFrame.dataset.loaded === 'true') return;
+    previewLoading.hidden = true;
+    previewHint.hidden = false;
+  }, 12000);
 }
 
-/**
- * Leer los parámetros de la URL para restaurar una búsqueda compartida.
- */
+function closePreview() {
+  clearTimeout(state.previewTimer);
+
+  if (typeof previewDialog.close === 'function' && previewDialog.open) {
+    previewDialog.close();
+  } else {
+    previewDialog.removeAttribute('open');
+  }
+
+  previewFrame.src = 'about:blank';
+  previewLoading.hidden = false;
+  previewHint.hidden = true;
+  document.body.classList.remove('preview-open');
+}
+
 function restoreFromUrl() {
   const params = new URLSearchParams(location.search);
-  const topic = params.get('tema');
-  const formats = (params.get('formato') || '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter((value) => FORMAT_ORDER.includes(value));
-  const scope = params.get('ambito');
+  const topic = cleanTopic(params.get('tema'));
 
-  if (topic) topicInput.value = cleanTopic(topic);
+  const formats = String(params.get('formato') || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase().replace(/^\./, ''))
+    .filter((value) => FORMAT_ORDER.includes(value));
+
   if (formats.length) state.formats = [...new Set(formats)];
-  if (scope && SCOPES[scope] != null) state.scope = scope;
+  if (topic) topicInput.value = topic;
+
+  refreshFormatChips();
+  setGoogleLink('');
+  return topic;
 }
 
-topicInput.addEventListener('input', refresh);
+topicInput.addEventListener('input', () => {
+  if (!cleanTopic(topicInput.value)) {
+    state.topic = '';
+    renderInitialState();
+  }
+});
 
 topicInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
-    openSearch();
+    runSearch();
   }
 });
 
-searchBtn.addEventListener('click', () => openSearch());
-copyBtn.addEventListener('click', copyQuery);
+searchBtn.addEventListener('click', () => runSearch());
 
 for (const chip of formatChips) {
   chip.addEventListener('click', () => toggleFormat(chip.dataset.format));
 }
 
-for (const chip of scopeChips) {
-  chip.addEventListener('click', () => {
-    state.scope = chip.dataset.scope;
-    refresh();
-  });
-}
-
 for (const chip of topicChips) {
   chip.addEventListener('click', () => {
     topicInput.value = chip.dataset.topic;
-    refresh();
-    topicInput.focus();
+    runSearch();
   });
 }
 
-for (const card of shortcutCards) {
-  card.addEventListener('click', () => useShortcut(card.dataset.shortcut));
+previewClose.addEventListener('click', closePreview);
+
+previewDialog.addEventListener('click', (event) => {
+  if (event.target === previewDialog) closePreview();
+});
+
+previewDialog.addEventListener('close', () => {
+  document.body.classList.remove('preview-open');
+  previewFrame.src = 'about:blank';
+});
+
+previewFrame.addEventListener('load', () => {
+  if (previewFrame.src === 'about:blank') return;
+  previewFrame.dataset.loaded = 'true';
+  previewLoading.hidden = true;
+  previewHint.hidden = true;
+});
+
+previewDownload.addEventListener('click', () => {
+  if (previewTitle.textContent) showNote(`Iniciando descarga de ${previewTitle.textContent}`);
+});
+
+const initialTopic = restoreFromUrl();
+
+if (initialTopic) {
+  runSearch();
+} else {
+  renderInitialState();
 }
-
-exactToggle.addEventListener('change', () => {
-  state.exact = exactToggle.checked;
-  refresh();
-});
-
-excludeToggle.addEventListener('change', () => {
-  state.exclude = excludeToggle.checked;
-  refresh();
-});
-
-restoreFromUrl();
-exactToggle.checked = state.exact;
-excludeToggle.checked = state.exclude;
-refresh();
