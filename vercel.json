@@ -2,13 +2,13 @@
   "version": 2,
   "builds": [
     { "src": "api/index.js", "use": "@vercel/node" },
-    { "src": "slides_downloader/public/**", "use": "@vercel/static" }
+    { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "src": "/download/(.*)", "dest": "/api/index.js" },
-    { "src": "/(style\\.css|app\\.js|ai\\.js)", "dest": "/slides_downloader/public/$1" },
-    { "src": "/(.*)", "dest": "/slides_downloader/public/index.html" }
+    { "src": "/(style\\.css|app\\.js|ai\\.js)", "dest": "/public/$1" },
+    { "src": "/(.*)", "dest": "/public/index.html" }
   ],
   "cleanUrls": true,
   "trailingSlash": false,

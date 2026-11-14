@@ -3,13 +3,13 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer } = require('../services/slideshareService');
-const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
+const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer } = require('./services/slideshareService');
+const { buildPresentationPrompt, buildAnalysis } = require('./services/promptService');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const publicDir = path.join(__dirname, '..', 'public');
-const downloadsDir = path.join(__dirname, '..', 'downloads');
+const publicDir = path.join(__dirname, 'public');
+const downloadsDir = path.join(__dirname, 'downloads');
 
 const DOWNLOAD_MIME_TYPES = {
   '.pdf': 'application/pdf',
