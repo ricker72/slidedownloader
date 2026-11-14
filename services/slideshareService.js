@@ -762,27 +762,28 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd') {
     let info = null;
     let method = 'lite';
     let fallbackUsed = false;
-
-    // Intento 1: fetch directo (funciona en serverless, pero SlideShare puede bloquear)
-    try {
-      info = await extractPresentationInfoLite(normalizedUrl);
-      method = 'lite';
-    } catch (error) {
-      console.warn('Fetch directo falló:', error.message);
-    }
-
-    // Intento 2: renderizador externo (si fetch falló o no devolvió imágenes y está configurado)
-    const hasImages = info && info.imageUrls && info.imageUrls.length > 0;
     const rendererConfigured = Boolean(process.env.RENDERER_URL);
 
-    if (!hasImages && rendererConfigured) {
+    // Intento 1: renderizador externo (siempre intentar primero si está configurado,
+    // porque es el único que hace scroll y obtiene TODAS las imágenes)
+    if (rendererConfigured) {
       try {
         info = await extractPresentationInfoViaRenderer(normalizedUrl);
         method = 'renderer';
-        fallbackUsed = true;
+        fallbackUsed = false;
       } catch (rendererError) {
         console.warn('Renderizador externo falló:', rendererError.message);
-        // Mantener el info del intento 1 (puede estar vacío)
+        info = null;
+      }
+    }
+
+    // Intento 2: fetch directo (solo como fallback si el renderizador no está configurado o falló)
+    if (!info) {
+      try {
+        info = await extractPresentationInfoLite(normalizedUrl);
+        method = 'lite';
+      } catch (error) {
+        console.warn('Fetch directo falló:', error.message);
       }
     }
 
