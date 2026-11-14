@@ -47,6 +47,37 @@ const DOWNLOAD_MIME_TYPES = {
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 };
 
+// La detección tarda varios segundos (renderizador). Guardar el resultado unos
+// minutos permite descargar sin repetirla, incluso si la vista previa aún no
+// había terminado en el navegador.
+const INSPECT_CACHE_TTL = 10 * 60 * 1000;
+const INSPECT_CACHE_LIMIT = 50;
+const inspectCache = new Map();
+
+function getCachedInspection(slideUrl) {
+  const entry = inspectCache.get(slideUrl);
+
+  if (!entry) return null;
+
+  if (entry.expiresAt <= Date.now()) {
+    inspectCache.delete(slideUrl);
+    return null;
+  }
+
+  return entry.payload;
+}
+
+function cacheInspection(slideUrl, payload) {
+  if (inspectCache.size >= INSPECT_CACHE_LIMIT) {
+    inspectCache.delete(inspectCache.keys().next().value);
+  }
+
+  inspectCache.set(slideUrl, {
+    payload,
+    expiresAt: Date.now() + INSPECT_CACHE_TTL
+  });
+}
+
 app.disable('x-powered-by');
 app.set('trust proxy', true);
 app.use(helmet({
@@ -90,6 +121,11 @@ app.post('/api/inspect', async (req, res) => {
 
     if (!slideUrl) {
       return res.status(400).json({ success: false, error: 'URL inválida de SlideShare' });
+    }
+
+    const cachedInspection = getCachedInspection(slideUrl);
+    if (cachedInspection) {
+      return res.json({ ...cachedInspection, cached: true });
     }
 
     let info = null;
@@ -138,7 +174,7 @@ app.post('/api/inspect', async (req, res) => {
     const hasImages = slideImages.length > 0;
     const needsManualEntry = (!hasImages && !rendererConfigured);
 
-    return res.json({
+    const payload = {
       success: true,
       url: slideUrl,
       title: cleanSlideTitle(info.title) || info.title,
@@ -152,7 +188,13 @@ app.post('/api/inspect', async (req, res) => {
       method,
       fallbackUsed,
       needsManualEntry
-    });
+    };
+
+    if (hasImages) {
+      cacheInspection(slideUrl, payload);
+    }
+
+    return res.json(payload);
   } catch (error) {
     console.error('Error en /api/inspect:', error);
     return res.status(500).json({ success: false, error: error.message || 'Error al inspeccionar la presentación' });
@@ -233,7 +275,7 @@ app.post('/api/prompt', async (req, res) => {
 
 app.post('/api/download', async (req, res) => {
   try {
-    const { url, format, quality } = req.body || {};
+    const { url, format, quality, imageUrls, title } = req.body || {};
 
     if (!url) {
       return res.status(400).json({ success: false, error: 'Se requiere una URL' });
@@ -257,7 +299,11 @@ app.post('/api/download', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Calidad no soportada. Opciones: sd, hd' });
     }
 
-    const result = await downloadPresentation(normalizedUrl, selectedFormat, selectedQuality);
+    const cachedInspection = getCachedInspection(normalizedUrl);
+    const result = await downloadPresentation(normalizedUrl, selectedFormat, selectedQuality, {
+      imageUrls: Array.isArray(imageUrls) && imageUrls.length ? imageUrls : cachedInspection?.previewImages,
+      title: title || cachedInspection?.title
+    });
     return res.json({
       success: true,
       title: result.title,

@@ -19,6 +19,8 @@ let isProcessing = false;
 let inspectTimer = null;
 let inspectController = null;
 let lastInspectedUrl = '';
+// Datos de la última vista previa: permiten descargar sin volver a renderizar.
+let lastInspect = null;
 
 const PREVIEW_LIMIT = 200;
 const AUTO_INSPECT_DELAY = 900;
@@ -104,6 +106,7 @@ function handleUrlChange() {
 
   clearPreview();
   lastInspectedUrl = '';
+  lastInspect = null;
 
   if (isProcessing) return;
 
@@ -167,6 +170,7 @@ async function inspectUrl(url, { automatic = false } = {}) {
 
   const controller = new AbortController();
   inspectController = controller;
+  lastInspect = null;
 
   showStatus('info', 'Detectando presentación...');
   if (!automatic) {
@@ -199,13 +203,20 @@ async function inspectUrl(url, { automatic = false } = {}) {
 
     lastInspectedUrl = data.url || url;
 
+    const gallery = data.galleryImages || data.previewImages || [];
+    lastInspect = {
+      url: lastInspectedUrl,
+      title: data.title || '',
+      images: gallery.slice(0, PREVIEW_LIMIT),
+    };
+
     showStatus('success', 'Presentación detectada');
     showDetail([
       ['Título', data.title],
       ['Diapositivas', data.slideCount != null ? String(data.slideCount) : ''],
       ['URL', data.url || url],
     ]);
-    renderPreview(data.galleryImages || data.previewImages || [], data.slideCount || 0);
+    renderPreview(gallery, data.slideCount || 0);
 
     if (data.challengeDetected) {
       showStatus('warning', 'SlideShare pidió una verificación; la vista previa puede estar incompleta');
@@ -292,6 +303,24 @@ function clearPreview() {
 }
 
 /**
+ * Comparar dos URLs de SlideShare sin depender de barras o mayúsculas.
+ */
+function isSamePresentation(a, b) {
+  if (!a || !b) return false;
+
+  const normalize = (value) => {
+    const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    return new URL(withProtocol).href.replace(/\/+$/, '').toLowerCase();
+  };
+
+  try {
+    return normalize(a) === normalize(b);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * Manejar descarga
  */
 async function handleDownload() {
@@ -324,14 +353,23 @@ async function handleDownload() {
     inspectController = null;
   }
 
-  showStatus('info', 'Preparando descarga...');
+  const payload = { url, format: currentFormat, quality: currentQuality };
+
+  // Reutilizar las diapositivas ya detectadas evita la llamada lenta al
+  // renderizador y reduce bastante el tiempo de descarga en HD.
+  if (lastInspect && lastInspect.images.length && isSamePresentation(lastInspect.url, url)) {
+    payload.imageUrls = lastInspect.images;
+    if (lastInspect.title) payload.title = lastInspect.title;
+  }
+
+  showStatus('info', currentQuality === 'hd' ? 'Preparando descarga en HD...' : 'Preparando descarga...');
   setLoading(true);
 
   try {
     const response = await fetch('/api/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, format: currentFormat, quality: currentQuality }),
+      body: JSON.stringify(payload),
     });
 
     const data = await readJson(response);

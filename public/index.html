@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SlideDownloader - Descargador de Presentaciones</title>
   <meta name="description" content="Descarga presentaciones de SlideShare en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX) con vista previa y calidad HD.">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
@@ -104,15 +104,9 @@
           </svg>
           <span class="brand-name">Slide<span>Downloader</span></span>
         </a>
-
-        <span class="topbar-pill">
-          <svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>
-          Gratis · Sin registro
-        </span>
       </div>
 
       <div class="hero">
-        <span class="eyebrow">Descargador de SlideShare</span>
         <h1>Descarga presentaciones en <span class="text-gradient">PDF, PowerPoint y Word</span></h1>
         <p class="hero-copy">
           Pega el enlace, revisa la vista previa y descarga la presentación completa con la calidad que elijas.
@@ -134,7 +128,7 @@
         <div class="card-header">
           <div>
             <h2 id="card-title">Descargar presentación</h2>
-            <p>Pega la URL de SlideShare y elige el formato de salida.</p>
+            <p>Pega la URL de SlideShare, elige la calidad y el formato de salida.</p>
           </div>
           <span class="card-chip">
             <span class="card-chip-dot" aria-hidden="true"></span>
@@ -150,8 +144,7 @@
               <input
                 type="url"
                 id="url-input"
-                placeholder="https://www.slideshare.net/slideshow/..."
-                value="https://www.slideshare.net/slideshow/gusano-barrenador-42662468/42662468"
+                placeholder="Pega tu URL aquí"
                 spellcheck="false"
                 autocomplete="off"
               >
@@ -168,10 +161,41 @@
           <p class="help-text">Solo enlaces de slideshare.net. La vista previa aparece automáticamente al pegar la URL.</p>
         </div>
 
+        <div class="quality-section">
+          <div class="section-label-row">
+            <span class="field-label">Calidad de imagen</span>
+            <span class="section-hint">HD usa la máxima resolución</span>
+          </div>
+
+          <div class="quality-options">
+            <label class="quality-option">
+              <input type="radio" name="quality" value="sd" checked>
+              <span class="quality-card">
+                <span class="quality-mark quality-mark--sd" aria-hidden="true">SD</span>
+                <span class="quality-text">
+                  <span class="quality-name">Estándar</span>
+                  <span class="quality-desc">Más rápida · ideal para revisar</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="quality-option">
+              <input type="radio" name="quality" value="hd">
+              <span class="quality-card">
+                <span class="quality-mark quality-mark--hd" aria-hidden="true">HD</span>
+                <span class="quality-text">
+                  <span class="quality-name">Alta resolución</span>
+                  <span class="quality-desc">Mejor nitidez · recomendada</span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
         <div class="format-section">
           <div class="section-label-row">
             <span class="field-label">Formato de descarga</span>
-            <span class="section-hint">Elige uno de los 5 disponibles</span>
+            <span class="section-hint">Alta calidad disponible</span>
           </div>
 
           <div class="format-options">
@@ -256,37 +280,6 @@
           </div>
         </div>
 
-        <div class="quality-section">
-          <div class="section-label-row">
-            <span class="field-label">Calidad de imagen</span>
-            <span class="section-hint">HD tarda un poco más</span>
-          </div>
-
-          <div class="quality-options">
-            <label class="quality-option">
-              <input type="radio" name="quality" value="sd" checked>
-              <span class="quality-card">
-                <span class="quality-mark quality-mark--sd" aria-hidden="true">SD</span>
-                <span class="quality-text">
-                  <span class="quality-name">Estándar</span>
-                  <span class="quality-desc">Más rápida · ideal para revisar</span>
-                </span>
-              </span>
-            </label>
-
-            <label class="quality-option">
-              <input type="radio" name="quality" value="hd">
-              <span class="quality-card">
-                <span class="quality-mark quality-mark--hd" aria-hidden="true">HD</span>
-                <span class="quality-text">
-                  <span class="quality-name">Alta resolución</span>
-                  <span class="quality-desc">Mejor nitidez · recomendada</span>
-                </span>
-              </span>
-            </label>
-          </div>
-        </div>
-
         <div class="preview-section" id="preview-section" hidden>
           <div class="preview-header">
             <span class="field-label">Vista previa</span>
@@ -333,6 +326,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

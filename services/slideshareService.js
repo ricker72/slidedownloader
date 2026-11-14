@@ -192,6 +192,35 @@ function selectSlideImages(list) {
 }
 
 /**
+ * Aceptar solo URLs de diapositivas del CDN de SlideShare enviadas por el
+ * cliente (la vista previa ya detectada). Así un cliente no puede forzar al
+ * servidor a descargar recursos arbitrarios.
+ */
+function sanitizeProvidedImageUrls(imageUrls) {
+  if (!Array.isArray(imageUrls)) return [];
+
+  const seen = new Set();
+  const result = [];
+
+  for (const value of imageUrls) {
+    if (typeof value !== 'string' || !isRemoteHttpUrl(value)) continue;
+
+    const parsed = parseSlideImageUrl(value);
+    if (!parsed) continue;
+
+    const key = `${parsed.deck}/${parsed.baseName}-${parsed.slideNumber}`.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(value);
+
+    if (result.length >= MAX_SLIDES) break;
+  }
+
+  return result;
+}
+
+/**
  * Solo se descargan recursos http(s): un src malicioso no debe sacar al
  * servidor hacia `file:`, `data:` ni otros esquemas.
  */
@@ -673,7 +702,7 @@ async function extractPresentationInfoViaRenderer(url) {
  * En Vercel, descargar decenas de diapositivas en serie puede agotar el tiempo
  * máximo de ejecución de la función.
  */
-async function downloadImagesConcurrently(imageUrls, quality, concurrency = 6) {
+async function downloadImagesConcurrently(imageUrls, quality, concurrency = 10) {
   const list = Array.isArray(imageUrls) ? imageUrls : [];
   const results = new Array(list.length).fill(null);
   let cursor = 0;
@@ -901,7 +930,7 @@ function createServiceError(message, status) {
   return error;
 }
 
-async function downloadPresentation(url, format = 'pdf', quality = 'sd') {
+async function downloadPresentation(url, format = 'pdf', quality = 'sd', options = {}) {
   const normalizedUrl = normalizeSlideShareUrl(url);
   if (!normalizedUrl) {
     throw createServiceError('URL inválida. Debe ser una URL válida de SlideShare.', 400);
@@ -919,6 +948,11 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd') {
 
   const { jobId, jobDir } = buildJobDir();
 
+  // La vista previa del cliente ya trae las diapositivas detectadas; usarlas
+  // evita la llamada lenta al renderizador.
+  const providedImages = sanitizeProvidedImageUrls(options.imageUrls);
+  const providedTitle = typeof options.title === 'string' ? cleanSlideTitle(options.title) : '';
+
   const cleanup = () => {
     try {
       fs.rmSync(jobDir, { recursive: true, force: true });
@@ -928,40 +962,41 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd') {
   };
 
   try {
-    let info = null;
-    let method = 'lite';
-    let fallbackUsed = false;
-    const rendererConfigured = Boolean(process.env.RENDERER_URL);
+    let imageUrls = providedImages;
+    let title = providedTitle || DEFAULT_TITLE;
 
-    // Intento 1: renderizador externo (siempre intentar primero si está configurado,
-    // porque es el único que hace scroll y obtiene TODAS las imágenes)
-    if (rendererConfigured) {
-      try {
-        info = await extractPresentationInfoViaRenderer(normalizedUrl);
-        method = 'renderer';
-        fallbackUsed = false;
-      } catch (rendererError) {
-        console.warn('Renderizador externo falló:', rendererError.message);
-        info = null;
+    if (!imageUrls.length) {
+      let info = null;
+
+      const rendererConfigured = Boolean(process.env.RENDERER_URL);
+
+      // Intento 1: renderizador externo (siempre intentar primero si está configurado,
+      // porque es el único que hace scroll y obtiene TODAS las imágenes)
+      if (rendererConfigured) {
+        try {
+          info = await extractPresentationInfoViaRenderer(normalizedUrl);
+        } catch (rendererError) {
+          console.warn('Renderizador externo falló:', rendererError.message);
+          info = null;
+        }
       }
-    }
 
-    // Intento 2: fetch directo (solo como fallback si el renderizador no está configurado o falló)
-    if (!info) {
-      try {
-        info = await extractPresentationInfoLite(normalizedUrl);
-        method = 'lite';
-      } catch (error) {
-        console.warn('Fetch directo falló:', error.message);
+      // Intento 2: fetch directo (solo como fallback si el renderizador no está configurado o falló)
+      if (!info) {
+        try {
+          info = await extractPresentationInfoLite(normalizedUrl);
+        } catch (error) {
+          console.warn('Fetch directo falló:', error.message);
+        }
       }
-    }
 
-    if (!info) {
-      throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
-    }
+      if (!info) {
+        throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
+      }
 
-    const imageUrls = selectSlideImages(info.imageUrls);
-    const title = cleanSlideTitle(info.title) || DEFAULT_TITLE;
+      imageUrls = selectSlideImages(info.imageUrls);
+      title = cleanSlideTitle(info.title) || DEFAULT_TITLE;
+    }
 
     if (!imageUrls.length) {
       throw createServiceError('No se encontraron imágenes válidas para convertir la presentación.', 422);
@@ -998,6 +1033,7 @@ module.exports = {
   extractPresentationInfoLite,
   extractPresentationInfoViaRenderer,
   selectSlideImages,
+  sanitizeProvidedImageUrls,
   downloadPresentation,
   buildPresentationFileFromImages,
   buildJobDir,
