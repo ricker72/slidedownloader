@@ -13,17 +13,6 @@ const resultsState = document.getElementById('results-state');
 const resultsGrid = document.getElementById('results-grid');
 const googleLink = document.getElementById('google-link');
 
-const previewDialog = document.getElementById('preview-dialog');
-const previewBadge = document.getElementById('preview-badge');
-const previewTitle = document.getElementById('preview-dialog-title');
-const previewDomain = document.getElementById('preview-domain');
-const previewFrame = document.getElementById('preview-frame');
-const previewLoading = document.getElementById('preview-loading');
-const previewHint = document.getElementById('preview-hint');
-const previewOpen = document.getElementById('preview-open');
-const previewDownload = document.getElementById('preview-download');
-const previewClose = document.getElementById('preview-close');
-
 const state = {
   topic: '',
   formats: [...DEFAULT_FORMATS],
@@ -33,7 +22,6 @@ const state = {
   loading: false,
   requestId: 0,
   controller: null,
-  previewTimer: null,
 };
 
 let noteTimer = null;
@@ -66,12 +54,14 @@ function downloadUrlFor(url) {
   return `/api/file?url=${encodeURIComponent(url)}`;
 }
 
-function previewUrlFor(item) {
-  if (item.format === 'pdf') {
-    return `https://docs.google.com/viewer?url=${encodeURIComponent(item.url)}&embedded=true`;
-  }
-
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(item.url)}`;
+function previewPageUrlFor(item) {
+  const params = new URLSearchParams({
+    url: item.url,
+    title: item.title,
+    format: item.format,
+    fileName: item.fileName || '',
+  });
+  return `/preview?${params}`;
 }
 
 function showNote(message, tone = 'info') {
@@ -109,10 +99,9 @@ function setGoogleLink(url) {
   if (url) {
     googleLink.href = url;
   } else {
-    const typePart = state.formats.length === 1
-      ? `filetype:${state.formats[0]}`
-      : `(${state.formats.map((format) => `filetype:${format}`).join(' OR ')})`;
-    googleLink.href = `https://www.google.com/search?q=${encodeURIComponent(`${typePart} ${state.topic}`.trim())}&hl=es`;
+    const typeFilters = state.formats.map((format) => `filetype:${format}`);
+    const typePart = typeFilters.length === 1 ? typeFilters[0] : `(${typeFilters.join(' OR ')})`;
+    googleLink.href = `https://www.google.com/search?q=${encodeURIComponent(`${state.topic} ${typePart}`.trim())}&hl=es`;
   }
 }
 
@@ -212,10 +201,11 @@ function createResultCard(item, index) {
   const card = document.createElement('article');
   card.className = 'result-card';
 
-  const previewButton = document.createElement('button');
-  previewButton.type = 'button';
+  const previewButton = document.createElement('a');
   previewButton.className = `result-preview result-preview--${item.format}`;
-  previewButton.addEventListener('click', () => openPreview(item));
+  previewButton.href = previewPageUrlFor(item);
+  previewButton.target = '_blank';
+  previewButton.rel = 'noopener noreferrer';
 
   const rank = document.createElement('span');
   rank.className = 'result-rank';
@@ -281,7 +271,7 @@ function createResultCard(item, index) {
 
   const viewLink = document.createElement('a');
   viewLink.className = 'btn btn-sm btn-ghost';
-  viewLink.href = item.url;
+  viewLink.href = previewPageUrlFor(item);
   viewLink.target = '_blank';
   viewLink.rel = 'noopener noreferrer';
   viewLink.append(createIcon('i-external'));
@@ -290,8 +280,6 @@ function createResultCard(item, index) {
   const downloadLink = document.createElement('a');
   downloadLink.className = 'btn btn-sm btn-primary';
   downloadLink.href = downloadUrlFor(item.url);
-  downloadLink.target = '_blank';
-  downloadLink.rel = 'noopener noreferrer';
   downloadLink.setAttribute('download', item.fileName || '');
   downloadLink.append(createIcon('i-download'));
   downloadLink.append(document.createTextNode('Descargar'));
@@ -461,51 +449,6 @@ function toggleFormat(format) {
   }
 }
 
-function openPreview(item) {
-  clearTimeout(state.previewTimer);
-  previewFrame.dataset.loaded = 'false';
-  previewLoading.hidden = false;
-  previewHint.hidden = true;
-  previewBadge.textContent = formatLabel(item.format);
-  previewBadge.className = `preview-badge format-badge--${item.format}`;
-  previewTitle.textContent = item.title;
-  previewTitle.title = item.title;
-  previewDomain.textContent = item.domain;
-  previewOpen.href = item.url;
-  previewDownload.href = downloadUrlFor(item.url);
-  previewDownload.setAttribute('download', item.fileName || '');
-  previewFrame.src = previewUrlFor(item);
-
-  if (typeof previewDialog.showModal === 'function') {
-    previewDialog.showModal();
-  } else {
-    previewDialog.setAttribute('open', '');
-  }
-
-  document.body.classList.add('preview-open');
-
-  state.previewTimer = setTimeout(() => {
-    if (previewFrame.dataset.loaded === 'true') return;
-    previewLoading.hidden = true;
-    previewHint.hidden = false;
-  }, 12000);
-}
-
-function closePreview() {
-  clearTimeout(state.previewTimer);
-
-  if (typeof previewDialog.close === 'function' && previewDialog.open) {
-    previewDialog.close();
-  } else {
-    previewDialog.removeAttribute('open');
-  }
-
-  previewFrame.src = 'about:blank';
-  previewLoading.hidden = false;
-  previewHint.hidden = true;
-  document.body.classList.remove('preview-open');
-}
-
 function restoreFromUrl() {
   const params = new URLSearchParams(location.search);
   const topic = cleanTopic(params.get('tema'));
@@ -549,28 +492,6 @@ for (const chip of topicChips) {
     runSearch();
   });
 }
-
-previewClose.addEventListener('click', closePreview);
-
-previewDialog.addEventListener('click', (event) => {
-  if (event.target === previewDialog) closePreview();
-});
-
-previewDialog.addEventListener('close', () => {
-  document.body.classList.remove('preview-open');
-  previewFrame.src = 'about:blank';
-});
-
-previewFrame.addEventListener('load', () => {
-  if (previewFrame.src === 'about:blank') return;
-  previewFrame.dataset.loaded = 'true';
-  previewLoading.hidden = true;
-  previewHint.hidden = true;
-});
-
-previewDownload.addEventListener('click', () => {
-  if (previewTitle.textContent) showNote(`Iniciando descarga de ${previewTitle.textContent}`);
-});
 
 const initialTopic = restoreFromUrl();
 

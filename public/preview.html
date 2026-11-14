@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vista previa — SlideDownloader</title>
+  <meta name="description" content="Vista previa de presentaciones y documentos encontrados.">
+  <link rel="stylesheet" href="style.css?v=11">
+</head>
+<body>
+  <header class="hero-header">
+    <div class="container hero-container">
+      <div class="topbar">
+        <a class="brand" href="/google" aria-label="Volver al filtro de presentaciones">
+          <span class="brand-name">Slide<span>Downloader</span></span>
+        </a>
+        <a href="/google" class="topbar-pill">
+          <span class="topbar-pill-label">Volver a resultados</span>
+        </a>
+      </div>
+      <div class="hero">
+        <span class="eyebrow" id="preview-format">Vista previa</span>
+        <h1 id="preview-title">Cargando documento…</h1>
+        <p class="hero-copy" id="preview-domain"></p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container document-preview-main">
+    <section class="document-preview-card" aria-label="Documento">
+      <div class="preview-frame-wrap">
+        <div class="preview-loading" id="preview-loading" role="status">
+          <span class="preview-spinner" aria-hidden="true"></span>
+          Cargando vista previa…
+        </div>
+        <iframe
+          id="preview-frame"
+          title="Vista previa del documento"
+          loading="eager"
+          referrerpolicy="no-referrer"
+          hidden
+        ></iframe>
+      </div>
+
+      <p class="document-preview-message" id="preview-message" role="status" hidden></p>
+
+      <footer class="preview-actions document-preview-actions">
+        <a class="btn btn-ghost" id="preview-source" href="#" target="_blank" rel="noopener noreferrer" hidden>
+          Abrir archivo original
+        </a>
+        <a class="btn btn-primary" id="preview-download" href="#" hidden>
+          Descargar archivo
+        </a>
+      </footer>
+    </section>
+  </main>
+
+  <script src="preview.js?v=1"></script>
+</body>
+</html>

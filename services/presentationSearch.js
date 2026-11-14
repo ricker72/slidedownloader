@@ -1,11 +1,9 @@
 /**
  * Búsqueda de presentaciones y documentos con filtros `filetype:`.
  *
- * Google no permite leer sus resultados desde el servidor (devuelve una
- * página vacía controlada por JavaScript), así que se consulta la versión
- * HTML de DuckDuckGo y se conservan únicamente enlaces que apuntan a un
- * archivo .ppt, .pptx o .pdf real. El usuario sigue viendo los mismos
- * filtros `filetype:` y los resultados se pueden abrir directamente.
+ * La búsqueda combina filtros `filetype:`; Bing se consulta primero y
+ * DuckDuckGo HTML/lite queda como respaldo. Solo se conservan enlaces
+ * directos a archivos .ppt, .pptx o .pdf.
  */
 
 const SUPPORTED_FORMATS = ['pptx', 'ppt', 'pdf'];
@@ -53,6 +51,14 @@ function stripTags(value) {
     .trim();
 }
 
+function decodeUrlPart(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function normalizeTopic(value) {
   return String(value || '')
     .replace(/["“”]/g, '')
@@ -73,17 +79,18 @@ function normalizeFormats(value) {
   return formats.length ? [...new Set(formats)] : [...DEFAULT_FORMATS];
 }
 
-function buildSearchQuery(topic, format) {
-  return `filetype:${format} ${normalizeTopic(topic)}`.trim();
+function buildSearchQuery(topic, formats = DEFAULT_FORMATS) {
+  const selectedFormats = normalizeFormats(formats);
+  const typeFilters = selectedFormats.map((format) => `filetype:${format}`);
+  const typeQuery = typeFilters.length === 1
+    ? typeFilters[0]
+    : `(${typeFilters.join(' OR ')})`;
+
+  return `${normalizeTopic(topic)} ${typeQuery}`.trim();
 }
 
 function buildGoogleUrl(topic, formats = DEFAULT_FORMATS) {
-  const clean = normalizeTopic(topic);
-  const typePart = formats.length === 1
-    ? `filetype:${formats[0]}`
-    : `(${formats.map((format) => `filetype:${format}`).join(' OR ')})`;
-
-  return `https://www.google.com/search?q=${encodeURIComponent(`${typePart} ${clean}`.trim())}&hl=es`;
+  return `https://www.google.com/search?q=${encodeURIComponent(buildSearchQuery(topic, formats))}&hl=es`;
 }
 
 function getFormatFromUrl(value) {
@@ -181,8 +188,8 @@ function toDirectResult(raw, fallbackFormat) {
   if (isExcludedDomain(parsed.hostname)) return null;
 
   const host = parsed.hostname.replace(/^www\./, '');
-  const fileName = decodeURIComponent(parsed.pathname.split('/').pop() || '');
-  const displayPath = decodeURIComponent(parsed.pathname);
+  const fileName = decodeUrlPart(parsed.pathname.split('/').pop() || '');
+  const displayPath = decodeUrlPart(parsed.pathname);
 
   return {
     title: cleanFileTitle(raw.title, url),
@@ -256,7 +263,7 @@ function parseDuckDuckGoLite(html) {
   return results;
 }
 
-async function fetchDuckDuckGo(url) {
+async function fetchSearchPage(url, { detectDuckDuckGoChallenge = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -268,13 +275,13 @@ async function fetchDuckDuckGo(url) {
     });
 
     if (!response.ok) {
-      throw new Error(`DuckDuckGo respondió ${response.status}`);
+      throw new Error(`El buscador respondió ${response.status}`);
     }
 
     const html = await response.text();
 
     // Una página de desafío/anomalía no contiene resultados utilizables.
-    if (/anomaly-modal|challenge-form|captcha/i.test(html) && !/result__a|result-link/i.test(html)) {
+    if (detectDuckDuckGoChallenge && /anomaly-modal|challenge-form|captcha/i.test(html) && !/result__a|result-link/i.test(html)) {
       throw new Error('DuckDuckGo pidió una verificación');
     }
 
@@ -284,13 +291,59 @@ async function fetchDuckDuckGo(url) {
   }
 }
 
+function decodeBingUrl(href, base = 'https://www.bing.com') {
+  const decoded = decodeEntities(href);
+
+  try {
+    const url = new URL(decoded, base);
+    if (!/(^|\.)bing\.com$/i.test(url.hostname)) return url.href;
+
+    const target = url.searchParams.get('u');
+    if (target?.startsWith('a1')) {
+      const targetUrl = Buffer.from(target.slice(2), 'base64url').toString('utf8');
+      try {
+        return new URL(targetUrl).href;
+      } catch {
+        return decoded;
+      }
+    }
+
+    return url.href;
+  } catch {
+    return decoded;
+  }
+}
+
+function parseBingHtml(html) {
+  const blocks = String(html || '')
+    .split(/(?=<li\b[^>]*class=["'][^"']*\bb_algo\b[^"']*["'])/i)
+    .slice(1);
+  const results = [];
+
+  for (const block of blocks) {
+    const anchor = block.match(/<h2\b[^>]*>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+    if (!anchor) continue;
+
+    const snippet = block.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+    results.push({
+      title: stripTags(anchor[2]),
+      url: decodeBingUrl(anchor[1]),
+      snippet: snippet ? cleanSnippet(snippet[1]) : '',
+      display: '',
+    });
+  }
+
+  return results;
+}
+
 /**
- * Consulta un formato con la versión HTML y, si no hay enlaces directos,
- * reintenta con la versión lite.
+ * Consulta los formatos solicitados con la versión HTML y reintenta con lite.
  */
-async function searchFormat(topic, format) {
-  const query = buildSearchQuery(topic, format);
+async function searchQuery(topic, formats) {
+  const selectedFormats = new Set(normalizeFormats(formats));
+  const query = buildSearchQuery(topic, [...selectedFormats]);
   const endpoints = [
+    `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
     `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
     `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
   ];
@@ -299,16 +352,20 @@ async function searchFormat(topic, format) {
 
   for (const endpoint of endpoints) {
     try {
-      const html = await fetchDuckDuckGo(endpoint);
+      const html = await fetchSearchPage(endpoint, {
+        detectDuckDuckGoChallenge: endpoint.includes('duckduckgo.com'),
+      });
       const parsed = endpoint.includes('lite.duckduckgo.com')
         ? parseDuckDuckGoLite(html)
-        : parseDuckDuckGoHtml(html);
+        : endpoint.includes('bing.com')
+          ? parseBingHtml(html)
+          : parseDuckDuckGoHtml(html);
 
       const direct = parsed
-        .map((item) => toDirectResult(item, format))
-        .filter(Boolean);
+        .map((item) => toDirectResult(item))
+        .filter((item) => item && selectedFormats.has(item.format));
 
-      if (direct.length) return direct;
+      if (direct.length) return mergeRoundRobin([direct]);
     } catch (error) {
       errors.push(error.message);
     }
@@ -379,22 +436,39 @@ async function searchPresentations({ topic, formats } = {}) {
     return { ...cached, cached: true };
   }
 
+  let combinedResults = [];
+  let combinedError = null;
+  try {
+    combinedResults = await searchQuery(cleanTopic, selectedFormats);
+  } catch (error) {
+    combinedError = error;
+  }
+
+  const foundFormats = new Set(combinedResults.map((item) => item.format));
+  const missingFormats = selectedFormats.filter((format) => !foundFormats.has(format));
   const settled = await Promise.allSettled(
-    selectedFormats.map((format) => searchFormat(cleanTopic, format))
+    missingFormats.map((format) => searchQuery(cleanTopic, [format]))
   );
 
-  const groups = [];
+  const groups = combinedResults.length ? [combinedResults] : [];
   const failures = [];
 
   settled.forEach((entry, index) => {
     if (entry.status === 'fulfilled') {
       groups.push(entry.value);
     } else {
-      failures.push({ format: selectedFormats[index], message: entry.reason?.message || 'Error' });
+      failures.push({ format: missingFormats[index], message: entry.reason?.message || 'Error' });
     }
   });
 
-  if (failures.length === selectedFormats.length) {
+  if (!groups.length && failures.length === missingFormats.length && combinedError) {
+    failures.unshift({
+      format: selectedFormats.join(','),
+      message: combinedError.message || 'Error'
+    });
+  }
+
+  if (!groups.length && failures.length) {
     const error = new Error('El buscador no respondió. Intenta de nuevo o abre la búsqueda en Google.');
     error.status = 502;
     error.failures = failures;
@@ -433,6 +507,7 @@ module.exports = {
   toDirectResult,
   parseDuckDuckGoHtml,
   parseDuckDuckGoLite,
+  parseBingHtml,
   mergeRoundRobin,
   searchPresentations,
 };

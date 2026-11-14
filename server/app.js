@@ -220,6 +220,11 @@ app.get('/google', (req, res) => {
   res.sendFile(path.join(publicDir, 'google.html'));
 });
 
+app.get('/preview', (req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(publicDir, 'preview.html'));
+});
+
 app.get('/filtro', (req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(publicDir, 'google.html'));

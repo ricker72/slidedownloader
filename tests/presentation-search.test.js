@@ -10,6 +10,7 @@ const {
   toDirectResult,
   parseDuckDuckGoHtml,
   parseDuckDuckGoLite,
+  parseBingHtml,
   mergeRoundRobin,
 } = require('../services/presentationSearch');
 
@@ -25,15 +26,18 @@ test('normalizeFormats conserva solo formatos válidos y usa todos por defecto',
   assert.deepEqual(normalizeFormats(''), ['pptx', 'ppt', 'pdf']);
 });
 
-test('buildSearchQuery usa únicamente el filtro filetype y el tema', () => {
-  assert.equal(buildSearchQuery('marketing digital', 'pptx'), 'filetype:pptx marketing digital');
-  assert.equal(buildSearchQuery('marketing digital', 'pdf'), 'filetype:pdf marketing digital');
+test('buildSearchQuery combina los formatos seleccionados con OR', () => {
+  assert.equal(buildSearchQuery('marketing digital', 'pptx'), 'marketing digital filetype:pptx');
+  assert.equal(
+    buildSearchQuery('Gusano barrenador', ['pptx', 'ppt', 'pdf']),
+    'Gusano barrenador (filetype:pptx OR filetype:ppt OR filetype:pdf)'
+  );
 });
 
 test('buildGoogleUrl combina los formatos seleccionados', () => {
   const url = buildGoogleUrl('historia', ['pptx', 'pdf']);
   assert.match(url, /^https:\/\/www\.google\.com\/search\?q=/);
-  assert.match(decodeURIComponent(url), /\(filetype:pptx OR filetype:pdf\) historia/);
+  assert.match(decodeURIComponent(url), /historia \(filetype:pptx OR filetype:pdf\)/);
 });
 
 test('getFormatFromUrl solo acepta extensiones de archivo compatibles', () => {
@@ -80,6 +84,12 @@ test('toDirectResult descarta páginas HTML, anuncios y sitios con registro', ()
   assert.equal(result.domain, 'x.edu');
   assert.equal(result.title, 'Energia solar');
   assert.equal(result.snippet, 'Energía solar.');
+
+  const malformedPath = toDirectResult({
+    title: 'Archivo',
+    url: 'https://x.edu/archivo%zz.pdf',
+  }, 'pdf');
+  assert.equal(malformedPath.fileName, 'archivo%zz.pdf');
 });
 
 test('parseDuckDuckGoHtml extrae resultados orgánicos y decodifica uddg', () => {
@@ -116,6 +126,25 @@ test('parseDuckDuckGoLite ignora enlaces patrocinados y extrae el snippet', () =
   const file = parsed.find((item) => item.title === 'PDF Historia');
   assert.equal(file.url, 'https://x.edu/historia.pdf');
   assert.equal(file.snippet, 'Documento de historia.');
+});
+
+test('parseBingHtml decodifica resultados de archivos directos', () => {
+  const fileUrl = 'https://files.example.org/slides/gusano_barrenador.pptx';
+  const redirect = `https://www.bing.com/ck/a?u=a1${Buffer.from(fileUrl).toString('base64url')}`;
+  const html = `
+    <ol id="b_results">
+      <li class="b_algo">
+        <h2><a href="${redirect}">Gusano barrenador - PPTX</a></h2>
+        <p>Presentación de referencia.</p>
+      </li>
+    </ol>
+  `;
+
+  const parsed = parseBingHtml(html);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].url, fileUrl);
+  assert.equal(parsed[0].title, 'Gusano barrenador - PPTX');
+  assert.equal(parsed[0].snippet, 'Presentación de referencia.');
 });
 
 test('mergeRoundRobin intercala formatos, elimina duplicados y respeta el límite', () => {
