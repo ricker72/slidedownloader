@@ -3,7 +3,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle } = require('../services/slideshareService');
+const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
 
 const app = express();
@@ -130,6 +130,10 @@ app.post('/api/inspect', async (req, res) => {
     // Solo diapositivas de esta presentación, en orden y sin duplicados.
     const slideImages = selectSlideImages(info.imageUrls);
 
+    // La vista previa usa la variante de 638 px (más nítida que el thumbnail
+    // de 320); el frontend reintenta con 320 si esa variante no existe.
+    const previewImages = slideImages.map((url) => applyImageQuality(url, 'sd'));
+
     // Si no hay imágenes y no hay renderizador, sugerir entrada manual
     const hasImages = slideImages.length > 0;
     const needsManualEntry = (!hasImages && !rendererConfigured);
@@ -141,8 +145,8 @@ app.post('/api/inspect', async (req, res) => {
       description: info.description || '',
       author: info.author || '',
       slideCount: slideImages.length,
-      previewImages: slideImages,
-      galleryImages: slideImages,
+      previewImages,
+      galleryImages: previewImages,
       previewQuality: 'hd',
       challengeDetected: info.challengeDetected || false,
       method,

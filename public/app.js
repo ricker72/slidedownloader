@@ -265,8 +265,17 @@ function renderPreview(images, total) {
     image.loading = 'lazy';
     image.referrerPolicy = 'no-referrer';
 
-    // Si el CDN bloquea la imagen, se retira en lugar de dejar un hueco roto.
-    image.addEventListener('error', () => figure.remove());
+    // Si el CDN no tiene la variante de 638 px, reintentar con la de 320 px
+    // antes de descartar la miniatura.
+    image.addEventListener('error', () => {
+      if (!image.dataset.retried && /-638\.(jpe?g|png|webp)/i.test(image.src)) {
+        image.dataset.retried = '1';
+        image.src = image.src.replace(/-638\.(jpe?g|png|webp)/i, '-320.$1');
+        return;
+      }
+
+      figure.remove();
+    });
 
     figure.append(image);
     previewGrid.append(figure);

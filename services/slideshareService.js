@@ -8,6 +8,15 @@ try {
 } catch (error) {
   chromium = null;
 }
+
+// SlideShare publica la variante de 2048 px como WebP. PowerPoint, PDF y Word
+// no la admiten de forma fiable, así que se convierte a JPEG cuando está disponible.
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  sharp = null;
+}
 const PDFDocument = require('pdfkit');
 const PptxGenJS = require('pptxgenjs');
 const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } = require('docx');
@@ -219,9 +228,6 @@ function toDataUri(buffer, mime) {
 }
 
 const QUALITY_LEVELS = ['sd', 'hd'];
-// SlideShare publica variantes de 1024 y 2048 px para la mayoría de slides.
-const HD_WIDTH = 2048;
-const HD_FALLBACK_WIDTH = 1024;
 
 // Formatos que la API puede generar de verdad.
 const SUPPORTED_FORMATS = ['pdf', 'pptx', 'ppsx', 'potx', 'docx'];
@@ -234,47 +240,105 @@ const PPTX_VARIANTS = {
   potx: 'application/vnd.openxmlformats-officedocument.presentationml.template.main+xml'
 };
 
-function rewriteImageWidth(imageUrl, width) {
-  if (!imageUrl) return imageUrl;
+// SlideShare publica cada diapositiva en varias "carpetas de calidad":
+//   /75/ → 2048 px (máxima), /95/ → 1024 px, /85/ → 638/320 px.
+// Cambiar solo el ancho de la URL no basta: hay que cambiar también la carpeta.
+const SLIDE_QUALITY_TIERS = {
+  hd: [
+    { version: '75', width: 2048 },
+    { version: '95', width: 1024 },
+    { version: '85', width: 638 }
+  ],
+  sd: [{ version: '85', width: 638 }]
+};
 
-  return imageUrl.replace(/-(\d{2,4})\.(jpe?g|png|webp)(\?[^#]*)?$/i, (match, currentWidth, extension, query) => {
-    const numericWidth = Number(currentWidth);
+function parseSlideImageUrl(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
 
-    if (!Number.isFinite(numericWidth) || numericWidth >= width) {
-      return match;
-    }
+  let parsed;
+  try {
+    parsed = new URL(imageUrl);
+  } catch (error) {
+    return null;
+  }
 
-    return `-${width}.${extension}${query || ''}`;
-  });
+  if (!/(^|\.)slidesharecdn\.com$/i.test(parsed.hostname)) return null;
+
+  // /<deck>/<carpeta>/<nombre>-<n>-<ancho>.<ext>
+  const match = parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/(.+)-(\d+)-(\d+)\.(jpe?g|png|webp)$/i);
+  if (!match) return null;
+
+  return {
+    origin: parsed.origin,
+    deck: match[1],
+    version: match[2],
+    baseName: match[3],
+    slideNumber: Number(match[4]),
+    width: Number(match[5]),
+    extension: match[6]
+  };
+}
+
+function buildSlideVariantUrl(parsed, version, width) {
+  return `${parsed.origin}/${parsed.deck}/${version}/${parsed.baseName}-${parsed.slideNumber}-${width}.${parsed.extension}`;
 }
 
 /**
- * Reescribir la URL del CDN de SlideShare a una resolución mayor.
- * Solo actúa sobre sufijos de ancho conocidos (`...-1-320.jpg`) y deja
- * intactas las URLs que ya son grandes o que no siguen ese patrón.
+ * Reescribir la URL del CDN de SlideShare a la mejor calidad disponible.
+ * Devuelve la URL original si no sigue el patrón o si ya es igual o mayor.
  */
 function applyImageQuality(imageUrl, quality) {
-  if (!imageUrl || String(quality).toLowerCase() !== 'hd') {
-    return imageUrl;
-  }
+  if (!imageUrl) return imageUrl;
 
-  return rewriteImageWidth(imageUrl, HD_WIDTH);
+  const parsed = parseSlideImageUrl(imageUrl);
+  if (!parsed) return imageUrl;
+
+  const tiers = SLIDE_QUALITY_TIERS[String(quality).toLowerCase() === 'hd' ? 'hd' : 'sd'];
+  const best = tiers.find((tier) => tier.width > parsed.width);
+
+  return best ? buildSlideVariantUrl(parsed, best.version, best.width) : imageUrl;
 }
 
 /**
  * Variantes a probar en orden. Si el CDN no publica la resolución máxima,
- * se intenta 1024 px y por último la URL original para no perder la slide.
+ * se intenta 1024 px, luego 638 px y por último la original para no perder
+ * ninguna diapositiva.
  */
 function getImageCandidates(imageUrl, quality = 'sd') {
-  if (!imageUrl || String(quality).toLowerCase() !== 'hd') {
-    return [imageUrl];
+  const parsed = parseSlideImageUrl(imageUrl);
+  if (!parsed) return [imageUrl];
+
+  const tiers = SLIDE_QUALITY_TIERS[String(quality).toLowerCase() === 'hd' ? 'hd' : 'sd'];
+  const candidates = tiers
+    .filter((tier) => tier.width > parsed.width)
+    .map((tier) => buildSlideVariantUrl(parsed, tier.version, tier.width));
+
+  candidates.push(imageUrl);
+  return [...new Set(candidates)];
+}
+
+/**
+ * PowerPoint/PDF/Word solo admiten PNG y JPEG. Cuando el CDN entrega WebP
+ * (habitual en la variante de 2048 px), se convierte a JPEG para no perder
+ * la diapositiva ni bajar de resolución.
+ */
+async function normalizeImageBuffer(buffer) {
+  const mime = detectImageMime(buffer);
+
+  if (mime === 'image/png' || mime === 'image/jpeg') {
+    return { buffer, mime };
   }
 
-  return [...new Set([
-    rewriteImageWidth(imageUrl, HD_WIDTH),
-    rewriteImageWidth(imageUrl, HD_FALLBACK_WIDTH),
-    imageUrl
-  ])];
+  if (!sharp) {
+    return { buffer, mime };
+  }
+
+  try {
+    const converted = await sharp(buffer).jpeg({ quality: 92 }).toBuffer();
+    return { buffer: converted, mime: 'image/jpeg' };
+  } catch (error) {
+    return { buffer, mime };
+  }
 }
 
 /**
@@ -287,7 +351,15 @@ async function downloadImage(imageUrl, quality = 'sd') {
 
   for (const candidate of candidates) {
     try {
-      return await downloadBinary(candidate);
+      const raw = await downloadBinary(candidate);
+      const { buffer, mime } = await normalizeImageBuffer(raw);
+
+      if (mime !== 'image/png' && mime !== 'image/jpeg') {
+        lastError = new Error(`Formato no admitido (${mime || 'desconocido'}): ${candidate}`);
+        continue;
+      }
+
+      return buffer;
     } catch (error) {
       lastError = error;
     }
