@@ -2046,6 +2046,17 @@ body {
   border: 0;
 }
 
+/* PSE opens its configured overlay even though this page renders its own results. */
+body.gsc-overflow-hidden {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+body.gsc-overflow-hidden .gsc-results-wrapper-overlay,
+body.gsc-overflow-hidden .gsc-modal-background-image {
+  display: none !important;
+}
+
 .result-snippet {
   display: -webkit-box;
   overflow: hidden;

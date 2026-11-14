@@ -418,7 +418,7 @@ function renderResults(payload) {
       icon: 'i-alert',
       tone: 'empty',
       title: `No encontramos archivos para «${payload.topic}»`,
-      text: 'Prueba con otras palabras, revisa la ortografía o activa más formatos. También puedes continuar la búsqueda en Google.',
+      text: 'Prueba con otras palabras o activa más formatos. Si esperabas resultados, revisa que el motor de Google tenga configurados sitios relevantes para el tema. También puedes continuar la búsqueda directamente en Google.',
       actions: [
         createStateAction({ label: 'Abrir búsqueda en Google', href: payload.googleUrl, icon: 'i-external' }),
         createStateAction({

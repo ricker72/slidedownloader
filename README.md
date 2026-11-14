@@ -81,7 +81,7 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 El Filtro de Presentaciones usa el **Programmable Search Element** oficial de Google para buscar y mostrar hasta 10 archivos directos `.ppt`, `.pptx` o `.pdf` en las tarjetas de la aplicación. No requiere una clave de API JSON; solo necesita el ID público de un motor de búsqueda:
 
-- `GOOGLE_CSE_ID`: ID de un Programmable Search Engine configurado para buscar en toda la web.
+- `GOOGLE_CSE_ID`: ID público de un Programmable Search Engine. Los resultados se limitan a los sitios y dominios configurados en ese motor.
 
 En PowerShell, antes de iniciar el servidor local:
 
@@ -90,9 +90,9 @@ $env:GOOGLE_CSE_ID = "tu-id-del-buscador"
 npm start
 ```
 
-En Vercel, configura `GOOGLE_CSE_ID` en **Project Settings → Environment Variables**. El ID se expone al navegador para cargar el componente oficial de Google; no es una clave secreta. Configura el motor en [Programmable Search Engine](https://programmablesearchengine.google.com/controlpanel/all) para buscar en toda la web.
+En Vercel, configura `GOOGLE_CSE_ID` en **Project Settings → Environment Variables**. El ID se expone al navegador para cargar el componente oficial de Google; no es una clave secreta. En [Programmable Search Engine](https://programmablesearchengine.google.com/controlpanel/all), agrega los dominios que quieres incluir en **Sites to search**. La aplicación no puede mostrar resultados de sitios que el motor no tenga habilitados; el enlace «Abrir búsqueda en Google» permite continuar la consulta en Google Search.
 
-La aplicación personaliza sus resultados mediante el callback oficial de resultados de Google y conserva las tarjetas con vista previa y descarga. No automatiza ni raspa la página de resultados de Google.
+La aplicación personaliza sus resultados mediante el callback oficial de resultados de Google y conserva las tarjetas con vista previa y descarga. No automatiza ni raspa la página de resultados de Google. Si un tema no devuelve archivos, comprueba los dominios configurados en el motor y que esos sitios incluyan archivos compatibles.
 
 ## 💻 Lenguaje de Programación
 
