@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { applyImageQuality, getImageCandidates } = require('../slides_downloader/services/slideshareService');
+const { applyImageQuality, getImageCandidates } = require('../services/slideshareService');
 
 test('applyImageQuality sube las miniaturas conocidas a 2048 px en HD', () => {
   assert.equal(

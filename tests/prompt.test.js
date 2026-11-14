@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPresentationPrompt, buildAnalysis, extractKeywords, cleanTitle } = require('../slides_downloader/services/promptService');
+const { buildPresentationPrompt, buildAnalysis, extractKeywords, cleanTitle } = require('../services/promptService');
 
 test('buildAnalysis extrae título, palabras clave y diapositivas', (t) => {
   const result = buildAnalysis({

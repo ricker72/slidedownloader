@@ -12,7 +12,7 @@ const {
   createPdfFromImages,
   detectImageMime,
   convertPptxToVariant
-} = require('../slides_downloader/services/slideshareService');
+} = require('../services/slideshareService');
 
 // PNG 1x1 rojo válido
 const pngBuffer = Buffer.from(

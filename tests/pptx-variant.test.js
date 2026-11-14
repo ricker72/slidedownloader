@@ -6,7 +6,7 @@ const path = require('node:path');
 const JSZip = require('jszip');
 const PptxGenJS = require('pptxgenjs');
 
-const { convertPptxToVariant } = require('../slides_downloader/services/slideshareService');
+const { convertPptxToVariant } = require('../services/slideshareService');
 
 const PPTX_MAIN =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml';

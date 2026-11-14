@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeSlideShareUrl, sanitizeFileName } = require('../slides_downloader/services/slideshareService');
+const { normalizeSlideShareUrl, sanitizeFileName } = require('../services/slideshareService');
 
 test('normalizeSlideShareUrl accepts valid SlideShare URLs', () => {
   const normalized = normalizeSlideShareUrl('slideshare.net/slideshow/foo/123456');

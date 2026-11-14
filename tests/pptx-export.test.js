@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
-const { createPptxFromImages, detectImageMime } = require('../slides_downloader/services/slideshareService');
+const { createPptxFromImages, detectImageMime } = require('../services/slideshareService');
 
 // PNG 1x1 rojo
 const PNG = Buffer.from(
