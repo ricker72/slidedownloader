@@ -99,10 +99,13 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
+  // El HTML debe revalidarse: así un despliegue nuevo se ve al instante.
+  res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 app.get('/ai', (req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(publicDir, 'ai.html'));
 });
 
@@ -309,6 +312,7 @@ app.post('/api/download', async (req, res) => {
       title: result.title,
       format: result.format,
       quality: result.quality,
+      source: result.source,
       slideCount: result.imageCount,
       downloadUrl: result.downloadUrl,
       fileName: result.fileName,

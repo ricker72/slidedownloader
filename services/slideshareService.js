@@ -1010,6 +1010,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
       title,
       format: extension,
       quality: selectedQuality,
+      source: providedImages.length ? 'preview' : 'renderer',
       imageCount: imageUrls.length,
       fileName: result.filename,
       filePath: result.outputFile,
