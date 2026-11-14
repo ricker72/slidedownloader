@@ -3,33 +3,146 @@ const urlInput = document.getElementById('url-input');
 const pasteBtn = document.getElementById('paste-btn');
 const detectBtn = document.getElementById('detect-btn');
 const downloadBtn = document.getElementById('download-btn');
-const statusIndicator = document.getElementById('status-indicator');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const statusDetail = document.getElementById('status-detail');
+const previewSection = document.getElementById('preview-section');
+const previewGrid = document.getElementById('preview-grid');
+const previewCount = document.getElementById('preview-count');
 
 // Estado actual
 let currentFormat = 'pptx';
+let currentQuality = 'sd';
 let isProcessing = false;
 
-// Inicializar
+// Detección automática
+let inspectTimer = null;
+let inspectController = null;
+let lastInspectedUrl = '';
+
+const PREVIEW_LIMIT = 8;
+const AUTO_INSPECT_DELAY = 900;
+
+const FORMAT_NAMES = {
+  pptx: 'PowerPoint (PPTX)',
+  ppsx: 'Presentación (PPSX)',
+  potx: 'Plantilla (POTX)',
+  pdf: 'PDF',
+  docx: 'Word (DOCX)',
+  ppt: 'PowerPoint (PPT)',
+  doc: 'Word (DOC)',
+};
+
+const QUALITY_NAMES = {
+  sd: 'SD (estándar)',
+  hd: 'HD (alta resolución)',
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Configurar escuchadores de eventos
   pasteBtn.addEventListener('click', handlePaste);
   detectBtn.addEventListener('click', handleDetect);
-  urlInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+  downloadBtn.addEventListener('click', handleDownload);
+
+  urlInput.addEventListener('input', handleUrlChange);
+  urlInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
       handleDownload();
     }
   });
-  downloadBtn.addEventListener('click', handleDownload);
 
+  for (const input of document.querySelectorAll('input[name="quality"]')) {
+    input.addEventListener('change', () => {
+      currentQuality = input.value;
+    });
+  }
+
+  checkServerStatus();
+});
+
+/**
+ * Leer una respuesta como JSON, con mensaje de error legible si no lo es.
+ */
+async function readJson(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      error: `Respuesta no válida del servidor (HTTP ${response.status})`,
+    };
+  }
+}
+
+/**
+ * Comprobar si el texto parece una URL de SlideShare.
+ */
+function isSlideShareUrl(value) {
+  if (!value || typeof value !== 'string') return false;
+
+  const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+  try {
+    const { hostname } = new URL(withProtocol);
+    const host = hostname.toLowerCase();
+    return host === 'slideshare.net' || host.endsWith('.slideshare.net');
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Detectar la presentación automáticamente al escribir o pegar una URL.
+ */
+function handleUrlChange() {
+  clearTimeout(inspectTimer);
+
+  // Cancelar una detección en curso: su resultado ya no corresponde a la URL actual.
+  if (inspectController) {
+    inspectController.abort();
+    inspectController = null;
+  }
+
+  clearPreview();
+  lastInspectedUrl = '';
+
+  if (isProcessing) return;
+
+  const url = urlInput.value.trim();
+  if (!isSlideShareUrl(url)) return;
+
+  inspectTimer = setTimeout(() => {
+    if (url === lastInspectedUrl) return;
+    inspectUrl(url, { automatic: true });
+  }, AUTO_INSPECT_DELAY);
+}
+
+/**
+ * Manejar botón pegar
+ */
+async function handlePaste() {
+  try {
+    const text = await navigator.clipboard.readText();
+
+    if (!text || !text.trim()) {
+      showStatus('warning', 'El portapapeles está vacío');
+      return;
+    }
+
+    urlInput.value = text.trim();
+    showStatus('info', 'Detectando presentación...');
+    handleUrlChange();
+  } catch (error) {
+    showStatus('error', 'No se pudo acceder al portapapeles');
+    console.error('Error:', error);
+  }
+}
 
 /**
  * Manejar botón detectar
  */
 async function handleDetect() {
   const url = urlInput.value.trim();
+
   if (!url) {
     showStatus('error', 'Ingresa una URL primero');
     return;
@@ -37,97 +150,136 @@ async function handleDetect() {
 
   if (isProcessing) return;
 
-  showStatus('idle', 'Verificando URL...');
-  setLoading(true);
+  clearTimeout(inspectTimer);
+  await inspectUrl(url);
+}
+
+/**
+ * Inspeccionar una presentación y mostrar su vista previa.
+ *
+ * @param {string} url - URL de SlideShare
+ * @param {{ automatic?: boolean }} options - La detección automática no bloquea la UI
+ */
+async function inspectUrl(url, { automatic = false } = {}) {
+  if (inspectController) {
+    inspectController.abort();
+  }
+
+  const controller = new AbortController();
+  inspectController = controller;
+
+  showStatus('info', 'Detectando presentación...');
+  if (!automatic) {
+    setLoading(true);
+    showDetail([]);
+  }
 
   try {
-    const response = await fetch('/api/ping-slide', {
+    const response = await fetch('/api/inspect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url }),
+      signal: controller.signal,
     });
 
-    const data = await response.json();
+    const data = await readJson(response);
 
-    if (data.success) {
-      if (data.challengeDetected) {
-        showStatus('warning', 'Página bajo protección de acceso. La descarga podría requerir autenticación.');
+    if (!response.ok || !data.success) {
+      const message = data.error || 'No se pudo detectar la presentación';
+
+      if (automatic) {
+        clearPreview();
+        showStatus('warning', message);
       } else {
-        showStatus('success', 'Página accesible');
-/**
- * Mostrar estado en la interfaz
- */
-function showStatus(type, message) {
-  const statusMap = {
-    'success': { className: 'success', color: 'var(--success)' },
-    'error': { className: 'error', color: 'var(--danger)' },
-    'warning': { className: 'warning', color: 'var(--warning)' },
-    'info': { className: 'info', color: 'var(--primary)' },
-    'idle': { className: 'idle', color: 'var(--secondary)' }
-  };
-
-  const config = statusMap[type] || statusMap.idle;
-  statusDot.className = config.className;
-  statusDot.style.background = config.color;
-  statusText.textContent = message;
-}
-
-/**
- * Mostrar detalles del estado
- */
-function showDetail(data, url, format) {
-  let html = '';
-  
-  if (data.success) {
-    html += `<p><strong>URL:</strong> ${url}</p>`;
-    html += `<p><strong>Formato:</strong> ${getFormatName(format)}</p>`;
-    html += `<button onclick="window.location.href='${data.downloadUrl}'" class="btn btn-primary">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
-        <path fill-rule="evenodd" d="M3 17a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1zm1.5-4.5c-.828 0-1.5.672-1.5 1.5S6.172 10 7 10s1.5-.672 1.5-1.5S7.828 5.5 7 5.5zm0 10c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5 1.5-.672 1.5-1.5-.672-1.5-1.5-1.5zM7 6a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1z" clip-rule="evenodd"/>
-      </svg>
-      Descargar Archivo
-    </button>`;
-  } else {
-    html += `<p style="color: var(--danger)">${data.error || data.message || 'Error desconocido'}</p>`;
-  }
-  
-  statusDetail.innerHTML = html;
-}
-
-/**
- * Obtener nombre del formato
- */
-function getFormatName(format) {
-  const formats = {
-    'pptx': 'PowerPoint',
-    'pdf': 'PDF',
-    'docx': 'Word'
-  };
-  return formats[format] || format;
-}
-
-/**
- * Configurar estado de carga
- */
-function setLoading(loading) {
-  isProcessing = loading;
-  document.querySelectorAll('.btn').forEach(btn => {
-    btn.disabled = loading;
-  });
-}
+        showStatus('error', message);
+        showErrorMessage(message);
       }
+      return;
+    }
 
-      showDetail(data, data.finalUrl, data.linksCount);
-    } else {
-      showStatus('error', 'No se pudo acceder a la URL');
-      showDetail({}, data.message || 'Error desconocido');
+    lastInspectedUrl = data.url || url;
+
+    showStatus('success', 'Presentación detectada');
+    showDetail([
+      ['Título', data.title],
+      ['Diapositivas', data.slideCount != null ? String(data.slideCount) : ''],
+      ['URL', data.url || url],
+    ]);
+    renderPreview(data.previewImages || [], data.slideCount || 0);
+
+    if (data.challengeDetected) {
+      showStatus('warning', 'SlideShare pidió una verificación; la vista previa puede estar incompleta');
     }
   } catch (error) {
+    if (error.name === 'AbortError') return;
+
+    if (automatic) {
+      clearPreview();
+      showStatus('warning', 'No se pudo detectar la presentación');
+      return;
+    }
+
     showStatus('error', 'Error de conexión');
+    showErrorMessage('No se pudo contactar con el servidor.');
     console.error('Error:', error);
   } finally {
-    setLoading(false);
+    if (inspectController === controller) {
+      inspectController = null;
+    }
+    if (!automatic) {
+      setLoading(false);
+    }
   }
+}
+
+/**
+ * Pintar la cuadrícula de vista previa con las primeras diapositivas.
+ */
+function renderPreview(images, total) {
+  if (!previewSection || !previewGrid) return;
+
+  previewGrid.textContent = '';
+
+  const validImages = (images || []).filter(Boolean).slice(0, PREVIEW_LIMIT);
+  if (!validImages.length) {
+    previewSection.hidden = true;
+    return;
+  }
+
+  previewSection.hidden = false;
+
+  if (previewCount) {
+    previewCount.textContent =
+      total > validImages.length
+        ? `Mostrando ${validImages.length} de ${total}`
+        : `${total} diapositiva${total === 1 ? '' : 's'}`;
+  }
+
+  validImages.forEach((src, index) => {
+    const figure = document.createElement('figure');
+    figure.className = 'preview-item';
+
+    const image = document.createElement('img');
+    image.src = src;
+    image.alt = `Diapositiva ${index + 1}`;
+    image.loading = 'lazy';
+    image.referrerPolicy = 'no-referrer';
+
+    // Si el CDN bloquea la imagen, se retira en lugar de dejar un hueco roto.
+    image.addEventListener('error', () => figure.remove());
+
+    figure.append(image);
+    previewGrid.append(figure);
+  });
+}
+
+/**
+ * Ocultar y vaciar la vista previa.
+ */
+function clearPreview() {
+  if (!previewSection || !previewGrid) return;
+  previewGrid.textContent = '';
+  previewSection.hidden = true;
 }
 
 /**
@@ -135,6 +287,7 @@ function setLoading(loading) {
  */
 async function handleDownload() {
   const url = urlInput.value.trim();
+
   if (!url) {
     showStatus('error', 'Ingresa una URL primero');
     return;
@@ -142,7 +295,6 @@ async function handleDownload() {
 
   if (isProcessing) return;
 
-  // Obtener formato seleccionado
   const selectedFormat = document.querySelector('input[name="format"]:checked');
   if (!selectedFormat) {
     showStatus('error', 'Selecciona un formato de descarga');
@@ -150,41 +302,47 @@ async function handleDownload() {
   }
   currentFormat = selectedFormat.value;
 
-  showStatus('idle', 'Preparando descarga...');
+  const selectedQuality = document.querySelector('input[name="quality"]:checked');
+  if (selectedQuality) {
+    currentQuality = selectedQuality.value;
+  }
+
+  clearTimeout(inspectTimer);
+
+  // Una detección pendiente no debe pisar el estado de la descarga.
+  if (inspectController) {
+    inspectController.abort();
+    inspectController = null;
+  }
+
+  showStatus('info', 'Preparando descarga...');
   setLoading(true);
-  downloadBtn.disabled = true;
 
   try {
     const response = await fetch('/api/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, format: currentFormat })
+      body: JSON.stringify({ url, format: currentFormat, quality: currentQuality }),
     });
 
-    const data = await response.json();
+    const data = await readJson(response);
 
-    if (data.success) {
-      showStatus('success', 'Descarga iniciada');
-      showDetail(data, data.url, data.format);
-      
-      // Opción: redirigir al archivo descargado
-      setTimeout(() => {
-        window.location.href = data.downloadUrl;
-      }, 2000);
+    if (response.ok && data.success) {
+      showStatus('success', 'Descarga lista');
+      showDownloadLink(data, url);
     } else {
-      showStatus('error', data.error || 'Error al procesar');
+      const message = data.error || 'Error al procesar la descarga';
+      showStatus('error', message);
+      showErrorMessage(message);
     }
   } catch (error) {
     showStatus('error', 'Error de conexión');
+    showErrorMessage('No se pudo contactar con el servidor.');
     console.error('Error:', error);
   } finally {
     setLoading(false);
-    downloadBtn.disabled = false;
   }
 }
-  // Verificar estado del servidor
-  checkServerStatus();
-});
 
 /**
  * Verificar estado del servidor
@@ -194,9 +352,9 @@ async function checkServerStatus() {
     const response = await fetch('/api/ping', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify({}),
     });
-    
+
     if (response.ok) {
       showStatus('success', 'Servidor conectado');
     } else {
@@ -208,22 +366,100 @@ async function checkServerStatus() {
 }
 
 /**
- * Manejar botón pegar
+ * Mostrar estado en la interfaz
  */
-function handlePaste() {
-  // Pegar del portapapeles
-  navigator.clipboard.readText().then(text => {
-    if (text && urlInput.value !== text) {
-      urlInput.value = text;
-      showStatus('success', 'URL detectada en el portapapeles');
-      setTimeout(() => {
-        showStatus('idle', 'Listo para descargar');
-      }, 2000);
-    } else {
-      showStatus('info', 'No se pudo acceder al portapapeles');
-    }
-  }).catch(err => {
-    showStatus('error', 'No se pudo acceder al portapapeles');
-    console.error('Error:', err);
-  });
+function showStatus(type, message) {
+  const validTypes = ['idle', 'info', 'success', 'error', 'warning'];
+  const state = validTypes.includes(type) ? type : 'idle';
+
+  statusDot.classList.remove('idle', 'info', 'success', 'error', 'warning');
+  statusDot.classList.add(state);
+  statusText.textContent = message;
+}
+
+/**
+ * Mostrar un detalle clave/valor sin inyectar HTML.
+ */
+function showDetail(rows) {
+  statusDetail.textContent = '';
+
+  for (const [label, value] of rows) {
+    if (!value) continue;
+
+    const paragraph = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = `${label}: `;
+    paragraph.append(strong, document.createTextNode(value));
+    statusDetail.append(paragraph);
+  }
+}
+
+/**
+ * Mostrar mensaje de error.
+ */
+function showErrorMessage(message) {
+  statusDetail.textContent = '';
+
+  const paragraph = document.createElement('p');
+  paragraph.className = 'error-text';
+  paragraph.textContent = message;
+  statusDetail.append(paragraph);
+}
+
+/**
+ * Mostrar enlace de descarga y lanzarla.
+ */
+function showDownloadLink(data, fallbackUrl) {
+  showDetail([
+    ['Título', data.title],
+    ['Formato', getFormatName(data.format)],
+    ['Calidad', getQualityName(data.quality)],
+    ['Diapositivas', data.slideCount != null ? String(data.slideCount) : ''],
+    ['URL', fallbackUrl],
+  ]);
+
+  if (!data.downloadUrl) return;
+
+  const link = document.createElement('a');
+  link.className = 'btn btn-primary';
+  link.href = data.downloadUrl;
+  link.textContent = 'Descargar archivo';
+
+  // El atributo download no funciona en todos los navegadores con rutas
+  // del mismo origen, pero no rompe nada si se ignora.
+  link.setAttribute('download', '');
+
+  statusDetail.append(link);
+  link.click();
+}
+
+/**
+ * Obtener nombre del formato
+ */
+function getFormatName(format) {
+  return FORMAT_NAMES[format] || format || '';
+}
+
+/**
+ * Obtener nombre de la calidad
+ */
+function getQualityName(quality) {
+  return QUALITY_NAMES[quality] || quality || '';
+}
+
+/**
+ * Configurar estado de carga
+ */
+function setLoading(loading) {
+  isProcessing = loading;
+
+  for (const button of document.querySelectorAll('.btn')) {
+    button.disabled = loading;
+  }
+
+  urlInput.disabled = loading;
+
+  if (!loading) {
+    downloadBtn.disabled = false;
+  }
 }

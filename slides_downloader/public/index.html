@@ -4,146 +4,335 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SlideDownloader - Descargador de Presentaciones</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='10' height='100' width='100'/><text x='50' y='68' text-anchor='middle' fill='white' font-size='40' font-weight='bold'>S</text></svg>">
+  <meta name="description" content="Descarga presentaciones de SlideShare en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX) con vista previa y calidad HD.">
+  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
-  <header class="header">
-    <div class="container">
-      <div class="header-content">
-        <div class="logo">
-          <svg viewBox="0 0 40 40" width="40" height="40">
-            <rect width="40" height="40" rx="10" fill="#2563EB"/>
-            <path d="M10 25 L14 19 L19 22 L25 15 L30 19 L34 15" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Sprite de iconos: un solo origen para todos los SVG -->
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="mark-gradient" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#60A5FA"/>
+        <stop offset="55%" stop-color="#2563EB"/>
+        <stop offset="100%" stop-color="#1E40AF"/>
+      </linearGradient>
+    </defs>
+
+    <symbol id="i-pptx" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <text x="15.6" y="25" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#fff">P</text>
+    </symbol>
+
+    <symbol id="i-ppsx" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M13.2 13.5l8 4.6-8 4.6z" fill="#fff"/>
+    </symbol>
+
+    <symbol id="i-potx" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <rect x="10.5" y="13" width="5.5" height="5" rx="1" fill="#fff"/>
+      <rect x="18" y="13" width="4.5" height="5" rx="1" fill="rgba(255,255,255,.55)"/>
+      <rect x="10.5" y="20" width="5.5" height="4.5" rx="1" fill="rgba(255,255,255,.55)"/>
+      <rect x="18" y="20" width="4.5" height="4.5" rx="1" fill="#fff"/>
+    </symbol>
+
+    <symbol id="i-pdf" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <text x="15.9" y="24.5" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.4" font-weight="700" fill="#fff">PDF</text>
+    </symbol>
+
+    <symbol id="i-docx" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <text x="15.6" y="25" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#fff">W</text>
+    </symbol>
+
+    <symbol id="i-link" viewBox="0 0 24 24">
+      <path d="M10.6 13.4a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <path d="M13.4 10.6a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="i-clipboard" viewBox="0 0 24 24">
+      <rect x="7" y="4" width="10" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M10 4.5V3.8A1.8 1.8 0 0 1 11.8 2h.4A1.8 1.8 0 0 1 14 3.8v.7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M10 10h4M10 14h4M10 18h2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="i-scan" viewBox="0 0 24 24">
+      <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.9"/>
+    </symbol>
+
+    <symbol id="i-download" viewBox="0 0 24 24">
+      <path d="M12 3v11m0 0 4.2-4.2M12 14 7.8 9.8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 16.5V18a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="i-bolt" viewBox="0 0 24 24">
+      <path d="M13 2 4.8 13.2a.6.6 0 0 0 .5 1h5.2L10 22l8.2-11.2a.6.6 0 0 0-.5-1h-5.2z" fill="currentColor"/>
+    </symbol>
+
+    <symbol id="i-shield" viewBox="0 0 24 24">
+      <path d="M12 2.8 4.8 5.6v5.7c0 4.6 3.1 8.3 7.2 9.9 4.1-1.6 7.2-5.3 7.2-9.9V5.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="m8.8 11.8 2.2 2.2 4.4-4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <symbol id="i-image" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <circle cx="8.5" cy="9.5" r="1.6" fill="currentColor"/>
+      <path d="m4.5 18 5.2-5.2 3.1 3.1 2.3-2.3 4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </svg>
+
+  <header class="hero-header">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="hero-glow hero-glow--one" aria-hidden="true"></div>
+    <div class="hero-glow hero-glow--two" aria-hidden="true"></div>
+
+    <div class="container hero-container">
+      <div class="topbar">
+        <a class="brand" href="/" aria-label="SlideDownloader, inicio">
+          <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+            <rect x="1" y="1" width="42" height="42" rx="13" fill="url(#mark-gradient)"/>
+            <path d="M22 10.5v15.2m0 0 5.6-5.6M22 25.7l-5.6-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13 31.5h18" stroke="rgba(255,255,255,.65)" stroke-width="2.8" stroke-linecap="round"/>
           </svg>
+          <span class="brand-name">Slide<span>Downloader</span></span>
+        </a>
 
-        <div class="input-section">
-          <label for="url-input">URL de la presentación:</label>
-          <div class="input-group">
-            <div class="input-wrapper">
-              <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor">
-                <path d="M10 2a8 8 0 0 0-8 8c0 4.418 7 10 7 10s7-5.582 7-10A8 8 0 0 0 10 2zm0 14a6 6 0 0 1 0-12 6 6 0 0 1 0 12z"/>
-              </svg>
-              <input 
-                type="url" 
-                id="url-input" 
-                placeholder="Pega el enlace de la presentación aquí..." 
-                value="https://www.slideshare.net/slideshow/gusano-barrenador-42662468/42662468"
-                spellcheck="false"
-              >
-            </div>
-            <button id="paste-btn" class="btn btn-secondary">
-              <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
-                <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h5A1.5 1.5 0 0 1 15 3.5v13a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 7 16.5v-13z"/>
-                <path d="M9 12h6M9 16h6" stroke="white" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              Pegar
-            </button>
-
-        <div class="format-section">
-          <label>Formato de descarga:</label>
-          <div class="format-options">
-            <label class="format-option">
-              <input type="radio" name="format" value="pptx" checked>
-              <div class="format-card">
-                <div class="format-icon">
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 8 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                    <line x1="10" y1="9" x2="8" y2="9"/>
-                  </svg>
-                </div>
-                <span class="format-name">PowerPoint</span>
-                <span class="format-ext">PPTX</span>
-              </div>
-            </label>
-            <label class="format-option">
-              <input type="radio" name="format" value="pdf">
-              <div class="format-card">
-                <div class="format-icon">
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-
-        <div class="action-section">
-          <button id="download-btn" class="btn btn-primary btn-lg">
-            <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor">
-              <path fill-rule="evenodd" d="M3 17a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1zm1.5-4.5c-.828 0-1.5.672-1.5 1.5S6.172 10 7 10s1.5-.672 1.5-1.5S7.828 5.5 7 5.5zm0 10c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5 1.5-.672 1.5-1.5-.672-1.5-1.5-1.5zM7 6a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1z" clip-rule="evenodd"/>
-            </svg>
-            Descargar
-          </button>
-        </div>
-
-        <div class="status-section" id="status-section">
-          <div class="status-indicator" id="status-indicator">
-            <div class="status-dot" id="status-dot"></div>
-            <span id="status-text">Listo para descargar</span>
-          </div>
-          <div id="status-detail" class="status-detail">
-            <p>Ingresa una URL y selecciona el formato para comenzar</p>
-          </div>
-        </div>
+        <span class="topbar-pill">
+          <svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>
+          Gratis · Sin registro
+        </span>
       </div>
-    </div>
-  </main>
 
-  <footer class="footer">
-    <div class="container">
-      <p>&copy; 2026 SlideDownloader. Todos los derechos reservados.</p>
-    </div>
-  </footer>
+      <div class="hero">
+        <span class="eyebrow">Descargador de SlideShare</span>
+        <h1>Descarga presentaciones en <span class="text-gradient">PDF, PowerPoint y Word</span></h1>
+        <p class="hero-copy">
+          Pega el enlace, revisa la vista previa y descarga la presentación completa con la calidad que elijas.
+          Sin marcas de agua ni programas adicionales.
+        </p>
 
-  <script src="app.js"></script>
-</body>
-</html>
-                    <polyline points="14 2 14 8 8 8"/>
-                    <path d="M16 13H8a2 2 0 0 0-2 2v3h18v-3a2 2 0 0 0-2-2z"/>
-                    <polyline points="16 13 12 17 8 13"/>
-                  </svg>
-                </div>
-                <span class="format-name">PDF</span>
-                <span class="format-ext">PDF</span>
-              </div>
-            </label>
-            <label class="format-option">
-              <input type="radio" name="format" value="docx">
-              <div class="format-card">
-                <div class="format-icon">
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 8 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                    <path d="M12 12v6M8 15h8"/>
-                  </svg>
-                </div>
-                <span class="format-name">Word</span>
-                <span class="format-ext">DOCX</span>
-              </div>
-            </label>
-          </div>
-        </div>
-            <button id="detect-btn" class="btn btn-outline">
-              <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
-                <path d="M10 2a8 8 0 0 0-8 8c0 4.418 7 10 7 10s7-5.582 7-10A8 8 0 0 0 10 2zm0 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12z"/>
-              </svg>
-              Detectar
-            </button>
-          </div>
-          <p class="help-text">Puedes usar enlaces de: SlideShare, Speaker Deck, Slides.com, Google Slides, etc.</p>
-        </div>
-          <h1>SlideDownloader</h1>
-        </div>
-        <p class="subtitle">Descargador de presentaciones profesionales</p>
+        <ul class="hero-perks" aria-label="Ventajas">
+          <li><svg class="icon" aria-hidden="true"><use href="#i-image"/></svg> Vista previa</li>
+          <li><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg> Calidad HD</li>
+          <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Descarga directa</li>
+        </ul>
       </div>
     </div>
   </header>
 
   <main>
-    <div class="container">
-      <div class="card">
+    <div class="container main-container">
+      <section class="card" aria-labelledby="card-title">
         <div class="card-header">
-          <h2>Descargar Presentación</h2>
-          <p>Ingresa el enlace de la presentación y elige el formato de descarga</p>
+          <div>
+            <h2 id="card-title">Descargar presentación</h2>
+            <p>Pega la URL de SlideShare y elige el formato de salida.</p>
+          </div>
+          <span class="card-chip">
+            <span class="card-chip-dot" aria-hidden="true"></span>
+            5 formatos disponibles
+          </span>
         </div>
+
+        <div class="input-section">
+          <label class="field-label" for="url-input">URL de la presentación</label>
+          <div class="input-group">
+            <div class="input-wrapper">
+              <svg class="icon input-icon" aria-hidden="true"><use href="#i-link"/></svg>
+              <input
+                type="url"
+                id="url-input"
+                placeholder="https://www.slideshare.net/slideshow/..."
+                value="https://www.slideshare.net/slideshow/gusano-barrenador-42662468/42662468"
+                spellcheck="false"
+                autocomplete="off"
+              >
+            </div>
+            <button id="paste-btn" type="button" class="btn btn-ghost">
+              <svg class="icon" aria-hidden="true"><use href="#i-clipboard"/></svg>
+              Pegar
+            </button>
+            <button id="detect-btn" type="button" class="btn btn-soft">
+              <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
+              Detectar
+            </button>
+          </div>
+          <p class="help-text">Solo enlaces de slideshare.net. La vista previa aparece automáticamente al pegar la URL.</p>
+        </div>
+
+        <div class="format-section">
+          <div class="section-label-row">
+            <span class="field-label">Formato de descarga</span>
+            <span class="section-hint">Elige uno de los 5 disponibles</span>
+          </div>
+
+          <div class="format-options">
+            <label class="format-option">
+              <input type="radio" name="format" value="pptx" checked>
+              <span class="format-card">
+                <span class="format-icon format-icon--ppt"><svg class="format-svg" aria-hidden="true"><use href="#i-pptx"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">PowerPoint</span>
+                  <span class="format-ext">PPTX</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option">
+              <input type="radio" name="format" value="ppsx">
+              <span class="format-card">
+                <span class="format-icon format-icon--pps"><svg class="format-svg" aria-hidden="true"><use href="#i-ppsx"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">Presentación</span>
+                  <span class="format-ext">PPSX</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option">
+              <input type="radio" name="format" value="potx">
+              <span class="format-card">
+                <span class="format-icon format-icon--pot"><svg class="format-svg" aria-hidden="true"><use href="#i-potx"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">Plantilla</span>
+                  <span class="format-ext">POTX</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option">
+              <input type="radio" name="format" value="pdf">
+              <span class="format-card">
+                <span class="format-icon format-icon--pdf"><svg class="format-svg" aria-hidden="true"><use href="#i-pdf"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">PDF</span>
+                  <span class="format-ext">Documento</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option">
+              <input type="radio" name="format" value="docx">
+              <span class="format-card">
+                <span class="format-icon format-icon--word"><svg class="format-svg" aria-hidden="true"><use href="#i-docx"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">Word</span>
+                  <span class="format-ext">DOCX</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option is-disabled" title="PPT es un formato binario antiguo; requiere conversión externa">
+              <input type="radio" name="format" value="ppt" disabled>
+              <span class="format-card">
+                <span class="format-icon format-icon--ppt"><svg class="format-svg" aria-hidden="true"><use href="#i-pptx"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">PowerPoint</span>
+                  <span class="format-ext">PPT</span>
+                  <span class="format-badge">Requiere conversión</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option is-disabled" title="DOC es un formato binario antiguo; requiere conversión externa">
+              <input type="radio" name="format" value="doc" disabled>
+              <span class="format-card">
+                <span class="format-icon format-icon--word"><svg class="format-svg" aria-hidden="true"><use href="#i-docx"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">Word</span>
+                  <span class="format-ext">DOC</span>
+                  <span class="format-badge">Requiere conversión</span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="quality-section">
+          <div class="section-label-row">
+            <span class="field-label">Calidad de imagen</span>
+            <span class="section-hint">HD tarda un poco más</span>
+          </div>
+
+          <div class="quality-options">
+            <label class="quality-option">
+              <input type="radio" name="quality" value="sd" checked>
+              <span class="quality-card">
+                <span class="quality-mark quality-mark--sd" aria-hidden="true">SD</span>
+                <span class="quality-text">
+                  <span class="quality-name">Estándar</span>
+                  <span class="quality-desc">Más rápida · ideal para revisar</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="quality-option">
+              <input type="radio" name="quality" value="hd">
+              <span class="quality-card">
+                <span class="quality-mark quality-mark--hd" aria-hidden="true">HD</span>
+                <span class="quality-text">
+                  <span class="quality-name">Alta resolución</span>
+                  <span class="quality-desc">Mejor nitidez · recomendada</span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="preview-section" id="preview-section" hidden>
+          <div class="preview-header">
+            <span class="field-label">Vista previa</span>
+            <span class="preview-count" id="preview-count"></span>
+          </div>
+          <div class="preview-grid" id="preview-grid"></div>
+        </div>
+
+        <div class="action-section">
+          <button id="download-btn" type="button" class="btn btn-primary btn-lg">
+            <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+            Descargar presentación
+          </button>
+          <p class="action-note">
+            <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+            Tu archivo se genera al instante y se descarga directamente.
+          </p>
+        </div>
+
+        <div class="status-section">
+          <div class="status-indicator">
+            <div class="status-dot idle" id="status-dot" aria-hidden="true"></div>
+            <span id="status-text" class="status-text" role="status" aria-live="polite">Listo para descargar</span>
+          </div>
+          <div id="status-detail" class="status-detail">
+            <p>Ingresa una URL y selecciona el formato para comenzar</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span class="footer-brand">
+        <svg class="brand-mark brand-mark--small" viewBox="0 0 44 44" aria-hidden="true">
+          <rect x="1" y="1" width="42" height="42" rx="13" fill="url(#mark-gradient)"/>
+          <path d="M22 10.5v15.2m0 0 5.6-5.6M22 25.7l-5.6-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M13 31.5h18" stroke="rgba(255,255,255,.65)" stroke-width="2.8" stroke-linecap="round"/>
+        </svg>
+        SlideDownloader
+      </span>
+      <p>&copy; 2026 SlideDownloader. Todos los derechos reservados.</p>
+    </div>
+  </footer>
+
+  <script src="app.js?v=2"></script>
+</body>
+</html>
