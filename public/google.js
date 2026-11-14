@@ -1,3 +1,9 @@
+const {
+  buildGoogleUrl,
+  buildSearchQuery,
+  parseGoogleSearchItems,
+} = window.SlideDownloaderSearchUtils;
+
 const FORMAT_ORDER = ['pptx', 'ppt', 'pdf'];
 const DEFAULT_FORMATS = [...FORMAT_ORDER];
 const MIN_TOPIC_LENGTH = 2;
@@ -12,6 +18,7 @@ const resultsSummary = document.getElementById('results-summary');
 const resultsState = document.getElementById('results-state');
 const resultsGrid = document.getElementById('results-grid');
 const googleLink = document.getElementById('google-link');
+const googleSearchHost = document.getElementById('google-search-element');
 
 const state = {
   topic: '',
@@ -21,10 +28,13 @@ const state = {
   lastPayload: null,
   loading: false,
   requestId: 0,
-  controller: null,
+  requestTimer: null,
 };
 
 let noteTimer = null;
+let googleSearchElement = null;
+let googleSearchPromise = null;
+const pendingSearches = new Map();
 
 function cleanTopic(value) {
   return String(value || '')
@@ -32,6 +42,107 @@ function cleanTopic(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 120);
+}
+
+function handleGoogleResults(_name, query, _promos, items) {
+  const search = pendingSearches.get(String(query || ''));
+  if (!search || search.requestId !== state.requestId) return true;
+
+  pendingSearches.delete(String(query));
+  clearTimeout(state.requestTimer);
+  state.requestTimer = null;
+
+  const payload = {
+    topic: search.topic,
+    formats: search.formats,
+    results: parseGoogleSearchItems(items, search.formats),
+    googleUrl: buildGoogleUrl(search.topic, search.formats),
+  };
+
+  state.results = payload.results;
+  state.googleUrl = payload.googleUrl;
+  state.lastPayload = payload;
+  state.loading = false;
+  renderResults(payload);
+
+  return true;
+}
+
+async function initializeGoogleSearch() {
+  const response = await fetch('/api/search/config', {
+    headers: { accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || !payload.success || !payload.engineId) {
+    throw new Error(payload.error || 'No se pudo cargar la configuración de búsqueda de Google.');
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      fail(new Error('Google no inicializó el buscador. Intenta de nuevo.'));
+    }, 20000);
+
+    function fail(error) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    }
+
+    function renderSearchElement() {
+      if (settled) return;
+
+      try {
+        window.google.search.cse.element.render({
+          div: googleSearchHost,
+          tag: 'searchresults-only',
+          gname: 'slidedownloader-results',
+          attributes: {
+            autoSearchOnLoad: false,
+            resultSetSize: '10',
+          },
+        });
+        googleSearchElement = window.google.search.cse.element.getElement('slidedownloader-results');
+        if (!googleSearchElement) {
+          throw new Error('Google no creó el componente de búsqueda.');
+        }
+
+        settled = true;
+        clearTimeout(timeout);
+        resolve(googleSearchElement);
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    window.__gcse = {
+      ...window.__gcse,
+      parsetags: 'explicit',
+      initializationCallback: renderSearchElement,
+      searchCallbacks: {
+        web: { ready: handleGoogleResults },
+      },
+    };
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `https://cse.google.com/cse.js?cx=${encodeURIComponent(payload.engineId)}`;
+    script.onerror = () => fail(new Error('No se pudo cargar el buscador oficial de Google.'));
+    document.head.append(script);
+  });
+}
+
+function getGoogleSearchElement() {
+  if (!googleSearchPromise) {
+    googleSearchPromise = initializeGoogleSearch().catch((error) => {
+      googleSearchPromise = null;
+      throw error;
+    });
+  }
+
+  return googleSearchPromise;
 }
 
 function createIcon(name, className = 'icon') {
@@ -99,9 +210,7 @@ function setGoogleLink(url) {
   if (url) {
     googleLink.href = url;
   } else {
-    const typeFilters = state.formats.map((format) => `filetype:${format}`);
-    const typePart = typeFilters.length === 1 ? typeFilters[0] : `(${typeFilters.join(' OR ')})`;
-    googleLink.href = `https://www.google.com/search?q=${encodeURIComponent(`${state.topic} ${typePart}`.trim())}&hl=es`;
+    googleLink.href = buildGoogleUrl(state.topic, state.formats);
   }
 }
 
@@ -388,44 +497,37 @@ async function runSearch() {
   state.loading = true;
   state.requestId += 1;
   const requestId = state.requestId;
+  const formats = [...state.formats];
+  const query = buildSearchQuery(topic, formats);
 
-  if (state.controller) state.controller.abort();
-  state.controller = new AbortController();
+  clearTimeout(state.requestTimer);
+  state.requestTimer = null;
+  pendingSearches.clear();
 
   syncUrl(topic);
+  state.googleUrl = buildGoogleUrl(topic, formats);
   resultsSummary.textContent = `Buscando archivos para «${topic}»…`;
   resultsHead.hidden = false;
   renderSkeletons();
 
   try {
-    const formats = state.formats.join(',');
-    const response = await fetch(`/api/search?q=${encodeURIComponent(topic)}&formats=${encodeURIComponent(formats)}`, {
-      signal: state.controller.signal,
-      headers: { accept: 'application/json' },
-    });
-
-    const payload = await response.json().catch(() => ({}));
-
+    const searchElement = await getGoogleSearchElement();
     if (requestId !== state.requestId) return;
 
-    if (!response.ok || !payload.success) {
-      throw new Error(payload.error || 'El buscador no respondió. Intenta de nuevo.');
-    }
-
-    state.results = payload.results || [];
-    state.googleUrl = payload.googleUrl || '';
-    state.lastPayload = payload;
-    renderResults(payload);
+    pendingSearches.set(query, { topic, formats, requestId });
+    state.requestTimer = setTimeout(() => {
+      if (requestId !== state.requestId) return;
+      pendingSearches.delete(query);
+      state.loading = false;
+      renderError(topic, 'Google tardó demasiado en responder. Intenta de nuevo.', state.googleUrl);
+    }, 30000);
+    searchElement.execute(query);
   } catch (error) {
-    if (error.name === 'AbortError' || requestId !== state.requestId) return;
+    if (requestId !== state.requestId) return;
 
     state.results = [];
-    state.googleUrl = '';
-    renderError(topic, error.message, '');
-  } finally {
-    if (requestId === state.requestId) {
-      state.loading = false;
-    }
+    state.loading = false;
+    renderError(topic, error.message, state.googleUrl);
   }
 }
 
@@ -469,6 +571,11 @@ function restoreFromUrl() {
 topicInput.addEventListener('input', () => {
   if (!cleanTopic(topicInput.value)) {
     state.topic = '';
+    state.requestId += 1;
+    state.loading = false;
+    pendingSearches.clear();
+    clearTimeout(state.requestTimer);
+    state.requestTimer = null;
     renderInitialState();
   }
 });

@@ -77,6 +77,23 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 </div>
 
+## 🔎 Configuración del filtro de Google
+
+El Filtro de Presentaciones usa el **Programmable Search Element** oficial de Google para buscar y mostrar hasta 10 archivos directos `.ppt`, `.pptx` o `.pdf` en las tarjetas de la aplicación. No requiere una clave de API JSON; solo necesita el ID público de un motor de búsqueda:
+
+- `GOOGLE_CSE_ID`: ID de un Programmable Search Engine configurado para buscar en toda la web.
+
+En PowerShell, antes de iniciar el servidor local:
+
+```powershell
+$env:GOOGLE_CSE_ID = "tu-id-del-buscador"
+npm start
+```
+
+En Vercel, configura `GOOGLE_CSE_ID` en **Project Settings → Environment Variables**. El ID se expone al navegador para cargar el componente oficial de Google; no es una clave secreta. Configura el motor en [Programmable Search Engine](https://programmablesearchengine.google.com/controlpanel/all) para buscar en toda la web.
+
+La aplicación personaliza sus resultados mediante el callback oficial de resultados de Google y conserva las tarjetas con vista previa y descarga. No automatiza ni raspa la página de resultados de Google.
+
 ## 💻 Lenguaje de Programación
 
 El proyecto está escrito principalmente en **JavaScript (ES6+)** para tanto el frontend como el backend, ejecutado sobre **Node.js**.

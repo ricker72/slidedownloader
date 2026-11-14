@@ -8,10 +8,9 @@ const {
   getFormatFromUrl,
   cleanFileTitle,
   toDirectResult,
-  parseDuckDuckGoHtml,
-  parseDuckDuckGoLite,
-  parseBingHtml,
+  parseGoogleSearchItems,
   mergeRoundRobin,
+  getGoogleCseId,
 } = require('../services/presentationSearch');
 
 test('normalizeTopic limpia espacios y comillas', () => {
@@ -30,14 +29,14 @@ test('buildSearchQuery combina los formatos seleccionados con OR', () => {
   assert.equal(buildSearchQuery('marketing digital', 'pptx'), 'marketing digital filetype:pptx');
   assert.equal(
     buildSearchQuery('Gusano barrenador', ['pptx', 'ppt', 'pdf']),
-    'Gusano barrenador (filetype:pptx OR filetype:ppt OR filetype:pdf)'
+    'Gusano barrenador filetype:pptx OR filetype:ppt OR filetype:pdf'
   );
 });
 
 test('buildGoogleUrl combina los formatos seleccionados', () => {
   const url = buildGoogleUrl('historia', ['pptx', 'pdf']);
   assert.match(url, /^https:\/\/www\.google\.com\/search\?q=/);
-  assert.match(decodeURIComponent(url), /historia \(filetype:pptx OR filetype:pdf\)/);
+  assert.match(decodeURIComponent(url), /historia filetype:pptx OR filetype:pdf/);
 });
 
 test('getFormatFromUrl solo acepta extensiones de archivo compatibles', () => {
@@ -58,16 +57,14 @@ test('cleanFileTitle reemplaza títulos genéricos por el nombre del archivo', (
   );
 });
 
-test('toDirectResult descarta páginas HTML, anuncios y sitios con registro', () => {
+test('toDirectResult descarta páginas que no son archivos compatibles', () => {
   assert.equal(
     toDirectResult({ title: 'Página', url: 'https://x.edu/articulo.html' }, 'pdf'),
     null
   );
 
-  assert.equal(
-    toDirectResult({ title: 'PDF', url: 'https://www.studocu.com/es/documento.pdf' }, 'pdf'),
-    null
-  );
+  const pdf = toDirectResult({ title: 'PDF', url: 'https://www.studocu.com/es/documento.pdf' });
+  assert.equal(pdf.format, 'pdf');
 
   assert.equal(
     toDirectResult({ title: 'PPTX', url: 'https://x.edu/archivo.pdf' }, 'pptx'),
@@ -92,59 +89,44 @@ test('toDirectResult descarta páginas HTML, anuncios y sitios con registro', ()
   assert.equal(malformedPath.fileName, 'archivo%zz.pdf');
 });
 
-test('parseDuckDuckGoHtml extrae resultados orgánicos y decodifica uddg', () => {
-  const html = `
-    <div class="result results_links results_links_deep result--ad">
-      <a class="result__a" href="https://duckduckgo.com/y.js?ad=1">Anuncio</a>
-    </div>
-    <div class="result results_links results_links_deep">
-      <h2 class="result__title">
-        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fx.edu%2Farchivo.pptx#frag">PPTX Presentación</a>
-      </h2>
-      <a class="result__snippet" href="#">Diapositivas de <b>prueba</b>.</a>
-      <a class="result__url" href="#">x.edu/archivo.pptx</a>
-    </div>
-  `;
+test('parseGoogleSearchItems conserva archivos compatibles seleccionados y elimina duplicados', () => {
+  const items = [
+    { title: 'Presentación uno', url: 'https://files.example.org/uno.pptx', contentNoFormatting: 'Slides uno.' },
+    { title: 'Documento', url: 'https://files.example.org/tema.docx', contentNoFormatting: 'Word.' },
+    { title: 'Presentación duplicada', url: 'https://files.example.org/uno.pptx', contentNoFormatting: 'Duplicado.' },
+    { title: 'Informe PDF', url: 'https://files.example.org/informe.pdf?download=1', content: 'PDF.' },
+    { title: 'Presentación PPT', url: 'https://files.example.org/clase.ppt', content: 'PPT.' },
+  ];
 
-  const parsed = parseDuckDuckGoHtml(html);
-  assert.equal(parsed.length, 1);
-  assert.equal(parsed[0].url, 'https://x.edu/archivo.pptx');
-  assert.equal(parsed[0].title, 'PPTX Presentación');
-  assert.equal(parsed[0].snippet, 'Diapositivas de prueba.');
+  const results = parseGoogleSearchItems(items, ['pptx', 'pdf']);
+  assert.deepEqual(results.map((item) => item.url), [
+    'https://files.example.org/uno.pptx',
+    'https://files.example.org/informe.pdf?download=1',
+  ]);
 });
 
-test('parseDuckDuckGoLite ignora enlaces patrocinados y extrae el snippet', () => {
-  const html = `
-    <a rel="nofollow" href="https://duckduckgo.com/y.js?ad=1" class='result-link'>Compra historia</a>
-    (Sponsored link - <a href="https://duckduckgo.com/duckduckgo-help-pages/company/ads-by-microsoft-on-duckduckgo-private-search/" class='result-link'>more info</a>)
-    <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fx.edu%2Fhistoria.pdf" class='result-link'>PDF Historia</a>
-    <td class='result-snippet'>Documento de historia.</td>
-  `;
+test('parseGoogleSearchItems usa los campos del callback de Programmable Search Element', () => {
+  const [result] = parseGoogleSearchItems([{
+    titleNoFormatting: 'Guía de ciencias',
+    url: 'https://files.example.org/ciencias.pdf',
+    contentNoFormatting: 'Material de apoyo.',
+  }], ['pdf']);
 
-  const parsed = parseDuckDuckGoLite(html);
-  assert.equal(parsed.length, 1);
-  const file = parsed.find((item) => item.title === 'PDF Historia');
-  assert.equal(file.url, 'https://x.edu/historia.pdf');
-  assert.equal(file.snippet, 'Documento de historia.');
+  assert.equal(result.title, 'Guía de ciencias');
+  assert.equal(result.format, 'pdf');
+  assert.equal(result.snippet, 'Material de apoyo.');
 });
 
-test('parseBingHtml decodifica resultados de archivos directos', () => {
-  const fileUrl = 'https://files.example.org/slides/gusano_barrenador.pptx';
-  const redirect = `https://www.bing.com/ck/a?u=a1${Buffer.from(fileUrl).toString('base64url')}`;
-  const html = `
-    <ol id="b_results">
-      <li class="b_algo">
-        <h2><a href="${redirect}">Gusano barrenador - PPTX</a></h2>
-        <p>Presentación de referencia.</p>
-      </li>
-    </ol>
-  `;
+test('getGoogleCseId devuelve el identificador público configurado', () => {
+  const originalCseId = process.env.GOOGLE_CSE_ID;
+  process.env.GOOGLE_CSE_ID = '  test-engine-id  ';
 
-  const parsed = parseBingHtml(html);
-  assert.equal(parsed.length, 1);
-  assert.equal(parsed[0].url, fileUrl);
-  assert.equal(parsed[0].title, 'Gusano barrenador - PPTX');
-  assert.equal(parsed[0].snippet, 'Presentación de referencia.');
+  try {
+    assert.equal(getGoogleCseId(), 'test-engine-id');
+  } finally {
+    if (originalCseId === undefined) delete process.env.GOOGLE_CSE_ID;
+    else process.env.GOOGLE_CSE_ID = originalCseId;
+  }
 });
 
 test('mergeRoundRobin intercala formatos, elimina duplicados y respeta el límite', () => {

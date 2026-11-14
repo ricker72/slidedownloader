@@ -6,7 +6,7 @@ const fs = require('fs');
 const { Readable } = require('stream');
 const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
-const { searchPresentations, buildGoogleUrl, normalizeTopic } = require('../services/presentationSearch');
+const { getGoogleCseId } = require('../services/presentationSearch');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -230,29 +230,18 @@ app.get('/filtro', (req, res) => {
   res.sendFile(path.join(publicDir, 'google.html'));
 });
 
-app.get('/api/search', async (req, res) => {
-  const topic = normalizeTopic(req.query.q || req.query.tema || '');
-  const formats = req.query.formats || req.query.formato || '';
-
+app.get('/api/search/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
 
-  try {
-    const payload = await searchPresentations({ topic, formats });
-    return res.json({ success: true, ...payload });
-  } catch (error) {
-    const status = error.status || 500;
-
-    if (status >= 500) {
-      console.warn('Error en /api/search:', error.message);
-    }
-
-    return res.status(status).json({
+  const engineId = getGoogleCseId();
+  if (!engineId) {
+    return res.status(503).json({
       success: false,
-      error: error.message || 'No se pudo completar la búsqueda',
-      googleUrl: buildGoogleUrl(topic, error.formats),
-      failures: Array.isArray(error.failures) ? error.failures.slice(0, 5) : null
+      error: 'La búsqueda de Google no está configurada. Define GOOGLE_CSE_ID en el entorno del servidor.'
     });
   }
+
+  return res.json({ success: true, engineId });
 });
 
 app.get('/api/file', async (req, res) => {
