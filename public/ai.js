@@ -35,6 +35,7 @@ const galleryEmpty = document.getElementById('gallery-empty');
 let currentAnalysis = null;
 let currentGallery = [];
 let selectedFormat = 'pptx';
+let analyzedInputValue = '';
 
 /* ============================================================
    Navegación entre vistas
@@ -181,21 +182,32 @@ function getSelectedOptions() {
 
 async function handleAnalyze() {
   const url = urlInput.value.trim();
+  const status = document.getElementById('ai-status');
 
   if (!url) {
-    showStatus(document.getElementById('ai-status'), 'error', 'Ingresa una URL primero');
+    showStatus(status, 'error', 'Pega el enlace de una presentación para continuar.');
     return;
   }
 
   if (!isSlideShareUrl(url)) {
-    showStatus(document.getElementById('ai-status'), 'error', 'URL inválida de SlideShare');
+    showStatus(status, 'error', 'El enlace debe pertenecer a slideshare.net.');
     return;
   }
 
+  currentAnalysis = null;
+  currentGallery = [];
+  analyzedInputValue = '';
+  resultPanel.hidden = true;
+  optionsPanel.hidden = true;
+  promptContainer.hidden = true;
+  document.getElementById('ai-manual-entry').hidden = true;
+
   detectBtn.disabled = true;
+  urlInput.disabled = true;
   const originalText = detectBtn.innerHTML;
   detectBtn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg> Analizando…';
   detectBtn.classList.add('btn-loading');
+  showStatus(status, 'info', 'Buscando la información pública de la presentación…');
 
   try {
     const response = await fetch('/api/inspect', {
@@ -216,23 +228,13 @@ async function handleAnalyze() {
       description: data.description || '',
       author: data.author || '',
       slideCount: data.slideCount || 0,
+      keywords: data.keywords || [],
       galleryImages: data.galleryImages || data.previewImages || [],
       previewImages: data.previewImages || [],
       challengeDetected: data.challengeDetected || false
     };
     currentGallery = currentAnalysis.galleryImages;
-
-    currentAnalysis = {
-      url: data.url,
-      title: data.title || 'Presentación sin título',
-      description: data.description || '',
-      author: data.author || '',
-      slideCount: data.slideCount || 0,
-      galleryImages: data.galleryImages || data.previewImages || [],
-      previewImages: data.previewImages || [],
-      challengeDetected: data.challengeDetected || false
-    };
-    currentGallery = currentAnalysis.galleryImages;
+    analyzedInputValue = url;
 
     statTitle.textContent = currentAnalysis.title;
     statSlides.textContent = currentAnalysis.slideCount || '—';
@@ -252,23 +254,22 @@ async function handleAnalyze() {
       document.getElementById('manual-description').value = currentAnalysis.description;
       document.getElementById('manual-author').value = currentAnalysis.author;
       document.getElementById('manual-slides').value = currentAnalysis.slideCount || 12;
-      showStatus(document.getElementById('ai-status'), 'warning', 'SlideShare bloqueó el análisis automático. Completa los datos manualmente o configura un servidor de renderizado externo.');
+      showStatus(status, 'warning', 'El análisis encontró información parcial. Completa los datos que falten para mejorar el prompt.');
     } else {
       manualEntry.hidden = true;
       if (currentAnalysis.challengeDetected) {
-        showStatus(document.getElementById('ai-status'), 'warning', 'SlideShare mostró una verificación; el análisis puede estar incompleto.');
+        showStatus(status, 'warning', 'SlideShare limitó el acceso; la información detectada podría estar incompleta.');
       } else {
-        showStatus(document.getElementById('ai-status'), 'success', 'Presentación analizada correctamente.');
+        showStatus(status, 'success', 'Presentación analizada. Revisa los datos y genera tu prompt.');
       }
     }
-
-    detectBtn.innerHTML = originalText;
   } catch (error) {
-    showStatus(document.getElementById('ai-status'), 'error', error.message || 'Error de conexión al analizar');
-    detectBtn.innerHTML = originalText;
+    showStatus(status, 'error', error.message || 'No se pudo analizar la presentación.');
     console.error('Analyze error:', error);
   } finally {
     detectBtn.disabled = false;
+    urlInput.disabled = false;
+    detectBtn.innerHTML = originalText;
     detectBtn.classList.remove('btn-loading');
   }
 }
@@ -276,7 +277,22 @@ async function handleAnalyze() {
 detectBtn.addEventListener('click', handleAnalyze);
 
 urlInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') handleAnalyze();
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleAnalyze();
+  }
+});
+
+urlInput.addEventListener('input', () => {
+  if (currentAnalysis && urlInput.value.trim() !== analyzedInputValue) {
+    currentAnalysis = null;
+    currentGallery = [];
+    resultPanel.hidden = true;
+    optionsPanel.hidden = true;
+    promptContainer.hidden = true;
+    document.getElementById('ai-manual-entry').hidden = true;
+    showStatus(document.getElementById('ai-status'), 'info', 'Enlace modificado. Analízalo para generar un prompt con sus datos.');
+  }
 });
 
 /* ============================================================

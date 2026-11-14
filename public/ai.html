@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asistente de Presentaciones IA — SlideDownloader</title>
   <meta name="description" content="Analiza una presentación de SlideShare y genera un prompt profesional para crear una nueva presentación o documento con tu IA preferida.">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
@@ -178,20 +178,28 @@
             </div>
           </div>
 
-          <div class="input-section">
-            <label class="field-label" for="ai-url">URL de la presentación</label>
-            <div class="input-group">
+          <div class="input-section ai-url-section">
+            <label class="field-label ai-url-label" for="ai-url">Enlace de la presentación de SlideShare</label>
+            <div class="input-group ai-url-control">
               <div class="input-wrapper">
                 <svg class="icon input-icon" aria-hidden="true"><use href="#i-link"/></svg>
-                <input type="url" id="ai-url" placeholder="https://www.slideshare.net/slideshow/..." autocomplete="off" spellcheck="false">
+                <input
+                  type="url"
+                  id="ai-url"
+                  placeholder="Pega aquí tu enlace"
+                  aria-describedby="ai-url-example ai-url-help ai-status"
+                  autocomplete="url"
+                  spellcheck="false"
+                >
               </div>
-              <button id="ai-detect" class="btn btn-soft">
+              <button id="ai-detect" type="button" class="btn btn-soft">
                 <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
                 Analizar presentación
               </button>
             </div>
-            <p id="ai-status" class="status-text">Listo para analizar</p>
-            <p class="help-text">Solo enlaces de slideshare.net. El análisis lee el título, descripción, autor y número de diapositivas.</p>
+            <p class="ai-url-example" id="ai-url-example">Ejemplo: <code>https://www.slideshare.net/slideshow/tema-de-la-presentacion/123456789</code></p>
+            <p class="help-text ai-url-help" id="ai-url-help">Analizaremos la información pública disponible: título, descripción, autor, diapositivas y conceptos clave. Solo se admiten enlaces de slideshare.net.</p>
+            <p id="ai-status" class="status-text" role="status" aria-live="polite">Listo para analizar</p>
           </div>
 
           <!-- Resultado del análisis -->
@@ -237,7 +245,7 @@
                 <div>
                   <h3 style="margin:0 0 8px 0;font-size:17px">Entrada manual de datos</h3>
                   <p style="margin:0;font-size:12.5px;color:var(--muted)">
-                    SlideShare bloqueó la detección automática. Ingresa los datos manualmente para generar el prompt.
+                    No pudimos recuperar todos los datos automáticamente. Revisa o completa esta información para que el prompt sea más preciso.
                   </p>
                 </div>
               </div>
@@ -255,7 +263,7 @@
                 <input type="text" id="manual-author" placeholder="Nombre del autor" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:var(--radius-md);font-family:var(--font);font-size:14px;margin-top:8px">
 
                 <p class="help-text" style="margin-top:12px">
-                  Los datos se usarán para generar el prompt profesional. Las imágenes se omitirán del documento generado.
+                  El prompt pedirá crear imágenes originales para cada diapositiva, aunque no se hayan podido recuperar las imágenes de referencia.
                 </p>
               </div>
             </div>
@@ -335,7 +343,7 @@
               <label class="checkbox-row">
                 <input type="checkbox" id="opt-images" checked>
                 <span class="checkbox-check"></span>
-                <span class="checkbox-label">Incluir prompts para generar imágenes propias</span>
+                <span class="checkbox-label">Pedir una imagen propia para cada diapositiva</span>
               </label>
               <label class="checkbox-row">
                 <input type="checkbox" id="opt-notes" checked>
@@ -420,6 +428,6 @@
     </div>
   </footer>
 
-  <script src="ai.js?v=1"></script>
+  <script src="ai.js?v=2"></script>
 </body>
 </html>

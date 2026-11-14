@@ -77,3 +77,23 @@ test('buildPresentationPrompt funciona con solo título (sin análisis)', () => 
   assert.ok(prompt.length > 200);
   assert.ok(prompt.includes('Tema genérico'));
 });
+
+test('buildPresentationPrompt define una estructura detallada y legible para proyección en aula', () => {
+  const prompt = buildPresentationPrompt({
+    analysis: {
+      title: 'Ciencias naturales',
+      description: 'Introducción a los ecosistemas y su conservación.',
+      slideCount: 18
+    },
+    options: { slides: 12, includeImages: true }
+  });
+
+  assert.match(prompt, /Portada:.*subtítulo/i);
+  assert.match(prompt, /Introducción y agenda/);
+  assert.match(prompt, /exactamente 1 o 2 diapositivas consecutivas a cada tema/);
+  assert.match(prompt, /imagen o visual original.*diferente para cada diapositiva/i);
+  assert.match(prompt, /proyección en aulas/i);
+  assert.match(prompt, /cuerpo de 28–32 px/);
+  assert.match(prompt, /Total exacto: 12 diapositivas/);
+  assert.match(prompt, /\| # \| Titular \| Subtítulo \|/);
+});

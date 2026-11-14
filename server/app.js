@@ -395,6 +395,13 @@ app.post('/api/inspect', async (req, res) => {
     // La vista previa usa la variante de 638 px (más nítida que el thumbnail
     // de 320); el frontend reintenta con 320 si esa variante no existe.
     const previewImages = slideImages.map((url) => applyImageQuality(url, 'sd'));
+    const analysis = buildAnalysis({
+      title: cleanSlideTitle(info.title) || info.title,
+      description: info.description || '',
+      author: info.author || '',
+      url: slideUrl,
+      slideCount: slideImages.length
+    });
 
     // Si no hay imágenes y no hay renderizador, sugerir entrada manual
     const hasImages = slideImages.length > 0;
@@ -403,10 +410,11 @@ app.post('/api/inspect', async (req, res) => {
     const payload = {
       success: true,
       url: slideUrl,
-      title: cleanSlideTitle(info.title) || info.title,
-      description: info.description || '',
-      author: info.author || '',
-      slideCount: slideImages.length,
+      title: analysis.title,
+      description: analysis.description,
+      author: analysis.author,
+      slideCount: analysis.slideCount,
+      keywords: analysis.keywords,
       previewImages,
       galleryImages: previewImages,
       previewQuality: 'hd',

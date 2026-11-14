@@ -1081,6 +1081,10 @@ body {
     border-radius: 20px;
   }
 
+  .ai-url-section {
+    padding: 16px;
+  }
+
   .card-header {
     flex-direction: column;
     gap: 10px;
@@ -1218,6 +1222,97 @@ body {
 /* Card de análisis */
 .analysis-result {
   margin-top: 22px;
+}
+
+.ai-url-section {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8fbff 0%, #fff 100%);
+  border: 1px solid #dbeafe;
+  border-radius: var(--radius-lg);
+}
+
+.ai-url-label {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.ai-url-control {
+  margin-top: 12px;
+}
+
+#ai-url {
+  width: 100%;
+  height: 60px;
+  padding: 0 18px 0 50px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  background: #fff;
+  font-family: var(--font);
+  font-size: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#ai-url::placeholder {
+  color: var(--muted-light);
+}
+
+#ai-url:hover {
+  border-color: #93c5fd;
+}
+
+#ai-url:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.ai-url-control:focus-within .input-icon {
+  color: var(--brand);
+}
+
+.ai-url-control .btn {
+  min-height: 60px;
+  padding: 0 22px;
+  white-space: nowrap;
+}
+
+.ai-url-example {
+  margin-top: 12px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ai-url-example code {
+  color: var(--brand-dark);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.ai-url-help {
+  max-width: 76ch;
+  line-height: 1.6;
+}
+
+.ai-url-section .status-text {
+  min-height: 20px;
+  margin-top: 12px;
+}
+
+.ai-url-section .status-text.error {
+  color: var(--danger);
+}
+
+.ai-url-section .status-text.success {
+  color: #047857;
+}
+
+.ai-url-section .status-text.warning {
+  color: #a16207;
 }
 
 .result-summary {

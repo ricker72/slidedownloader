@@ -186,30 +186,35 @@ function normalizeOptions(options = {}) {
 }
 
 function buildNarrative(slides) {
-  const stages = [
-    ['Apertura (1 diapositiva)', 'título potente, subtítulo con la promesa y una imagen que fije el tono.'],
-    ['Contexto (2–3 diapositivas)', 'por qué importa el tema ahora, para quién es y qué pregunta guía la presentación.'],
-    ['Desarrollo (60 % de las diapositivas)', 'ideas principales en secuencia lógica, cada una con evidencia visual o dato.'],
-    ['Síntesis (2 diapositivas)', 'conecta las ideas, resuelve la pregunta inicial y muestra el aprendizaje clave.'],
-    ['Cierre (1 diapositiva)', 'llamada a la acción concreta, contacto o siguiente paso.']
-  ];
+  const topicSlides = Math.max(1, slides - 4);
+  const minTopics = Math.max(1, Math.ceil(topicSlides / 2));
+  const maxTopics = Math.max(minTopics, Math.min(6, topicSlides));
+  const lastTopicSlide = slides - 2;
 
-  return stages.map(([name, purpose]) => `- ${name}: ${purpose}`).join('\n') +
-    `\n\nTotal solicitado: ${slides} diapositivas (incluye portada, agenda opcional y cierre).`;
+  return [
+    '- Diapositiva 1 — Portada: título claro que refleje el tema analizado, subtítulo que explique la promesa de aprendizaje y una imagen original representativa.',
+    '- Diapositiva 2 — Introducción y agenda: presenta el contexto, el objetivo y la relevancia; enumera los temas que se desarrollarán, en el mismo orden y con los mismos nombres que sus secciones.',
+    `- Diapositivas 3–${lastTopicSlide} — Desarrollo (${topicSlides} diapositivas): organiza el contenido en ${minTopics}–${maxTopics} temas principales basados en la información analizada.`,
+    '  - Dedica exactamente 1 o 2 diapositivas consecutivas a cada tema: una para explicar la idea central y otra, si hace falta, para un ejemplo, aplicación, evidencia o caso.',
+    '  - Desarrolla cada tema con claridad y detalle; no lo conviertas en una lista de etiquetas ni excedas 2 diapositivas por tema.',
+    `- Diapositiva ${slides - 1} — Síntesis y conclusión: conecta los aprendizajes, responde al objetivo y destaca las conclusiones principales.`,
+    `- Diapositiva ${slides} — Cierre: propone un siguiente paso y, cuando se hayan usado fuentes verificables, incluye referencias breves y legibles.`,
+    `\nTotal exacto: ${slides} diapositivas, incluida portada, introducción/agenda, desarrollo y cierre. Ajusta la cantidad de temas al espacio disponible sin eliminar los conceptos centrales.`
+  ].join('\n');
 }
 
 function buildVisualRules(options) {
   const imageRule = options.includeImages
-    ? `- Imágenes: ${options.style.imagery}. Genera o selecciona imágenes propias y originales para cada concepto; no reutilices capturas, logos ni material de la presentación original. Todas las imágenes deben ser 16:9, sin texto incrustado, sin marcas de agua y con una dirección de arte coherente. Incluye el prompt de generación de cada imagen y su texto alternativo.`
+    ? `- Imágenes: ${options.style.imagery}. Crea una imagen o visual original, pertinente y diferente para cada diapositiva, incluida la portada, la agenda y el cierre. No reutilices imágenes, capturas, logos ni material de la presentación original. Usa formato 16:9, sin texto incrustado ni marcas de agua, con dirección de arte coherente. Especifica el prompt para generar la imagen y su texto alternativo en cada diapositiva.`
     : '- Sin imágenes generadas: usa recursos tipográficos, formas y datos. Si propones una imagen, debe ser original y con licencia verificable.';
 
   return [
     `- Tema visual: ${options.style.name}. ${options.style.direction}.`,
     `- Paleta: ${options.palette.name}. ${options.palette.colors}. ${options.palette.note}.`,
-    '- Formato: 16:9, 1920 × 1080 px, con márgenes seguros de 80 px.',
-    '- Tipografía: sans-serif legible (por ejemplo Inter, Manrope, Source Sans 3 o la fuente corporativa si se indica).',
-    '- Tamaños mínimos: titular 42–54 px, subtítulo 26–30 px, cuerpo 20–24 px, etiquetas 14–16 px. Nunca bajes de 18 px en el cuerpo.',
-    '- Contraste: texto principal sobre fondo claro con ratio mínimo 4.5:1; no uses texto claro sobre imágenes sin una capa de contraste.',
+    '- Diseña para proyección en aulas: formato 16:9, 1920 × 1080 px y márgenes seguros amplios; el texto debe leerse desde el fondo del salón.',
+    '- Tipografía sans-serif muy legible (por ejemplo Inter, Manrope o Source Sans 3), con títulos de 50–64 px, subtítulos de 34–40 px y cuerpo de 28–32 px. No uses texto de cuerpo menor de 24 px.',
+    '- Usa fondos claros, alto contraste (mínimo 4.5:1) y espacio en blanco. No coloques texto claro sobre imágenes sin una superficie de contraste.',
+    '- Evita párrafos extensos, tablas densas y adornos pequeños; prioriza una jerarquía visual clara y una idea principal por diapositiva.',
     imageRule
   ].join('\n');
 }
@@ -222,6 +227,7 @@ function buildContentRules(options) {
   return [
     '- Una sola idea principal por diapositiva; el titular debe ser una afirmación, no una etiqueta genérica.',
     '- Máximo 5 viñetas por diapositiva y 12–18 palabras por viñeta. Si necesitas más detalle, divídelo en otra diapositiva.',
+    '- Para cada tema, explica qué es, cómo funciona o por qué importa, y añade un ejemplo o aplicación cuando el material de referencia lo permita.',
     '- Convierte datos en visuales: cifras grandes, comparaciones, timeline, matriz o diagrama. No inventes cifras: usa "[dato pendiente]" cuando falte información.',
     '- Usa un lenguaje claro, sin jerga innecesaria; explica cualquier término técnico la primera vez.',
     '- Cada imagen debe tener texto alternativo breve y descriptivo.',
@@ -275,6 +281,7 @@ ${brandBlock}
 ${descriptionLine}
 ${keywordsLine}
 ${sourceLine}
+- Usa estos datos y el enlace de referencia para identificar los temas y conceptos que deben conservarse. Si el contenido completo del enlace no está disponible, trabaja con los metadatos detectados y señala cualquier dato faltante; no afirmes haber leído diapositivas que no pudiste consultar.
 
 ## Regla de originalidad
 No copies ni parafrasees literalmente el texto original, y no reutilices sus imágenes, iconos, logotipos, plantillas ni capturas. Usa el análisis solo para entender el tema, la intención y la estructura. Crea contenido nuevo, con ejemplos y explicaciones propias. Si el tema lo permite, aporta un ángulo distinto y más actual.
@@ -289,15 +296,18 @@ ${buildContentRules(options)}
 ${buildNarrative(options.slides)}
 ${notesBlock}
 ## Entrega esperada
-Devuelve la propuesta en una tabla con estas columnas:
+Desarrolla la presentación completa, no solo un resumen o una lista de ideas. Si la IA puede crear archivos, genera una presentación editable en PPTX y una versión PDF; si no puede adjuntar archivos, entrega contenido listo para trasladar a PowerPoint, Google Slides o Canva y exportarlo.
 
-| # | Titular de la diapositiva | Idea clave | Contenido (máx. 5 viñetas) | Concepto visual | Prompt de imagen | Notas del presentador |
+Devuelve el contenido diapositiva por diapositiva en una tabla con estas columnas:
+
+| # | Titular | Subtítulo | Idea clave | Contenido (máx. 5 viñetas) | Concepto visual | Prompt de imagen | Notas del presentador |
 
 Además:
-1. Antes de la tabla, escribe en 3 líneas el concepto creativo y la paleta elegida.
-2. Después de la tabla, incluye una lista de verificación de calidad: legibilidad, contraste, coherencia visual, originalidad y claridad del mensaje.
-3. Si detectas que falta información para algún dato, márcalo como "[dato pendiente]" en lugar de inventarlo.
-4. No incluyas texto dentro de las imágenes generadas; el texto debe vivir en la diapositiva.
+1. Incluye una fila por diapositiva y respeta el orden, la estructura y el total exacto indicados; no agrupes varias diapositivas en una sola fila.
+2. Antes de la tabla, escribe en 3 líneas el concepto creativo y la paleta elegida.
+3. Después de la tabla, incluye una lista de verificación de calidad: lectura desde el fondo del aula, tamaño del texto, contraste, imágenes originales, coherencia visual y claridad del mensaje.
+4. Si detectas que falta información para algún dato, márcalo como "[dato pendiente]" en lugar de inventarlo.
+5. No incluyas texto dentro de las imágenes generadas; el texto debe vivir en la diapositiva.
 
 Empieza directamente con la propuesta, sin explicar el proceso.`;
 }
