@@ -178,7 +178,7 @@ app.post('/render', async (req, res) => {
 
     // Deduplicar y filtrar
     const deduped = [...new Set(result.imageUrls.filter(Boolean))];
-    const imageUrls = deduped.filter((u) => /(jpg|jpeg|png|gif|webp|bmp)/i.test(u)).slice(0, 60);
+    const imageUrls = deduped.filter((u) => /(jpg|jpeg|png|gif|webp|bmp)/i.test(u)).slice(0, 200);
 
     // Detectar challenge de SlideShare
     const challengeDetected =
@@ -194,7 +194,8 @@ app.post('/render', async (req, res) => {
       description: result.description || '',
       author: result.author || '',
       slideCount: imageUrls.length,
-      previewImages: imageUrls.slice(0, 8),
+      imageUrls,
+      previewImages: imageUrls,
       galleryImages: imageUrls,
       challengeDetected: challengeDetected || false,
       method: 'puppeteer'

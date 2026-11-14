@@ -76,6 +76,19 @@ function normalizeSlideShareUrl(rawUrl) {
   }
 }
 
+/**
+ * SlideShare añade el formato al título de la página ("Mi charla | PPTX").
+ * Se quita ese sufijo para nombres de archivo y vistas previas más limpios.
+ */
+function cleanSlideTitle(title) {
+  const value = String(title || '').replace(/\s+/g, ' ').trim();
+  if (!value) return '';
+
+  return value
+    .replace(/\s*\|\s*(PPTX?|PPTM|PPSX?|POTX?|PDF|DOCX?|KEY|ODP|ZIP)\s*$/i, '')
+    .trim();
+}
+
 function sanitizeFileName(name, extension) {
   const safe = String(name || DEFAULT_TITLE)
     .replace(/[^a-zA-Z0-9\u00C0-\u017F\s-_]/g, '')
@@ -96,6 +109,77 @@ function buildJobDir() {
 function isLikelyImageUrl(value) {
   if (!value || typeof value !== 'string') return false;
   return /\.(jpg|jpeg|png|webp|gif|bmp)(\?.*)?$/i.test(value) || value.includes('slidesharecdn');
+}
+
+// Tope de diapositivas por presentación. Evita respuestas gigantes y abusos.
+const MAX_SLIDES = 200;
+
+/**
+ * Las páginas de SlideShare incluyen, además de las diapositivas, miniaturas
+ * de presentaciones relacionadas, avatares y logos. Si se descargan tal cual,
+ * el archivo final mezcla diapositivas reales con imágenes ajenas.
+ *
+ * Este selector agrupa las URLs por carpeta del CDN (`.../<deck>/<version>/`)
+ * y se queda con la carpeta que contiene más diapositivas: la presentación
+ * actual. Después elimina duplicados por número de diapositiva y las ordena.
+ */
+function selectSlideImages(list) {
+  const urls = dedupeUrls(list).filter(isLikelyImageUrl);
+  const groups = new Map();
+
+  for (const url of urls) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (error) {
+      continue;
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+
+    // Patrón del CDN: /<deck>/<version>/<nombre>-<n>-<ancho>.<ext>
+    const match = parsed.pathname.match(/\/([^/]+)\/([^/]+)\/[^/]+-(\d+)-(\d+)\.(?:jpe?g|png|webp)$/i);
+    if (!match) continue;
+
+    const folder = `${match[1]}/${match[2]}`;
+    const slideNumber = Number(match[3]);
+    const width = Number(match[4]);
+
+    if (!Number.isFinite(slideNumber) || slideNumber <= 0) continue;
+
+    if (!groups.has(folder)) groups.set(folder, new Map());
+    const byNumber = groups.get(folder);
+    const current = byNumber.get(slideNumber);
+
+    // Si hay varias resoluciones de la misma diapositiva, conservar la mayor.
+    if (!current || width > current.width) {
+      byNumber.set(slideNumber, { url, width });
+    }
+  }
+
+  if (groups.size) {
+    let best = null;
+    for (const [folder, byNumber] of groups) {
+      if (!best || byNumber.size > best.byNumber.size) {
+        best = { folder, byNumber };
+      }
+    }
+
+    const ordered = [...best.byNumber.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, value]) => value.url);
+
+    if (ordered.length) {
+      return ordered.slice(0, MAX_SLIDES);
+    }
+  }
+
+  // Sin patrón reconocible: descartar imágenes que claramente no son diapositivas.
+  const filtered = urls.filter(
+    (url) => !/avatar|profile|user[-_]?photo|logo|icon|sprite|placeholder|default[-_]/i.test(url)
+  );
+
+  return (filtered.length ? filtered : urls).slice(0, MAX_SLIDES);
 }
 
 /**
@@ -231,7 +315,7 @@ async function downloadBinary(url, redirectCount = 0) {
     const request = lib.get(url, {
       headers: {
         'User-Agent': USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept': 'image/jpeg,image/png,image/*;q=0.8',
         'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7'
       }
     }, (response) => {
@@ -327,7 +411,7 @@ async function extractPresentationInfo(url) {
         title,
         description: readMeta('meta[name="description"]') || readMeta('meta[property="og:description"]') || readMeta('meta[name="twitter:description"]'),
         author: readMeta('meta[name="author"]') || readMeta('meta[property="article:author"]') || readMeta('meta[property="og:site_name"]'),
-        imageUrls: [...imageSet].slice(0, 60)
+        imageUrls: [...imageSet].slice(0, MAX_SLIDES)
       };
     });
 
@@ -441,7 +525,7 @@ async function extractPresentationInfoLite(url) {
     for (const match of urlMatches) addValue(match[0]);
 
     // Filtrar URLs probables de imágenes de slides
-    const imageUrls = dedupeUrls([...imageSet]).filter(isLikelyImageUrl).slice(0, 60);
+    const imageUrls = dedupeUrls([...imageSet]).filter(isLikelyImageUrl).slice(0, MAX_SLIDES);
 
     return {
       title: title.slice(0, 300),
@@ -501,7 +585,7 @@ async function extractPresentationInfoViaRenderer(url) {
       title: data.title || DEFAULT_TITLE,
       description: data.description || '',
       author: data.author || '',
-      imageUrls: data.imageUrls || [],
+      imageUrls: data.imageUrls || data.galleryImages || data.previewImages || [],
       challengeDetected: data.challengeDetected || false,
       sourceUrl: url,
       method: 'renderer'
@@ -791,8 +875,8 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd') {
       throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
     }
 
-    const imageUrls = dedupeUrls(info.imageUrls).filter(isLikelyImageUrl).slice(0, 60);
-    const title = (info.title || DEFAULT_TITLE).replace(/[\r\n]+/g, ' ').trim() || DEFAULT_TITLE;
+    const imageUrls = selectSlideImages(info.imageUrls);
+    const title = cleanSlideTitle(info.title) || DEFAULT_TITLE;
 
     if (!imageUrls.length) {
       throw createServiceError('No se encontraron imágenes válidas para convertir la presentación.', 422);
@@ -824,9 +908,11 @@ module.exports = {
   SUPPORTED_FORMATS,
   normalizeSlideShareUrl,
   sanitizeFileName,
+  cleanSlideTitle,
   extractPresentationInfo,
   extractPresentationInfoLite,
   extractPresentationInfoViaRenderer,
+  selectSlideImages,
   downloadPresentation,
   buildPresentationFileFromImages,
   buildJobDir,

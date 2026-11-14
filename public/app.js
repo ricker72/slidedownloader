@@ -20,7 +20,7 @@ let inspectTimer = null;
 let inspectController = null;
 let lastInspectedUrl = '';
 
-const PREVIEW_LIMIT = 8;
+const PREVIEW_LIMIT = 200;
 const AUTO_INSPECT_DELAY = 900;
 
 const FORMAT_NAMES = {
@@ -205,7 +205,7 @@ async function inspectUrl(url, { automatic = false } = {}) {
       ['Diapositivas', data.slideCount != null ? String(data.slideCount) : ''],
       ['URL', data.url || url],
     ]);
-    renderPreview(data.previewImages || [], data.slideCount || 0);
+    renderPreview(data.galleryImages || data.previewImages || [], data.slideCount || 0);
 
     if (data.challengeDetected) {
       showStatus('warning', 'SlideShare pidió una verificación; la vista previa puede estar incompleta');

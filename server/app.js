@@ -3,7 +3,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer } = require('../services/slideshareService');
+const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
 
 const app = express();
@@ -127,18 +127,22 @@ app.post('/api/inspect', async (req, res) => {
       });
     }
 
+    // Solo diapositivas de esta presentación, en orden y sin duplicados.
+    const slideImages = selectSlideImages(info.imageUrls);
+
     // Si no hay imágenes y no hay renderizador, sugerir entrada manual
+    const hasImages = slideImages.length > 0;
     const needsManualEntry = (!hasImages && !rendererConfigured);
 
     return res.json({
       success: true,
       url: slideUrl,
-      title: info.title,
+      title: cleanSlideTitle(info.title) || info.title,
       description: info.description || '',
       author: info.author || '',
-      slideCount: info.imageUrls.length,
-      previewImages: info.imageUrls.slice(0, 8),
-      galleryImages: info.imageUrls.slice(0, 60),
+      slideCount: slideImages.length,
+      previewImages: slideImages,
+      galleryImages: slideImages,
       previewQuality: 'hd',
       challengeDetected: info.challengeDetected || false,
       method,
@@ -173,17 +177,10 @@ app.post('/api/prompt', async (req, res) => {
     // Si la interfaz solo envía la URL, el servidor completa el análisis.
     if (!analysisInput.title && slideUrl) {
       let info = null;
-
-      try {
-        info = await extractPresentationInfoLite(slideUrl);
-      } catch (error) {
-        console.warn('Fetch directo falló en /api/prompt:', error.message);
-      }
-
-      const hasImages = info && info.imageUrls && info.imageUrls.length > 0;
       const rendererConfigured = Boolean(process.env.RENDERER_URL);
 
-      if (!hasImages && rendererConfigured) {
+      // El renderizador obtiene todas las diapositivas y metadatos fiables.
+      if (rendererConfigured) {
         try {
           info = await extractPresentationInfoViaRenderer(slideUrl);
         } catch (rendererError) {
@@ -191,11 +188,19 @@ app.post('/api/prompt', async (req, res) => {
         }
       }
 
+      if (!info) {
+        try {
+          info = await extractPresentationInfoLite(slideUrl);
+        } catch (error) {
+          console.warn('Fetch directo falló en /api/prompt:', error.message);
+        }
+      }
+
       if (info) {
         analysisInput.title = info.title;
         analysisInput.description = info.description;
         analysisInput.author = info.author;
-        analysisInput.slideCount = info.imageUrls.length;
+        analysisInput.slideCount = selectSlideImages(info.imageUrls).length;
       }
     }
 
