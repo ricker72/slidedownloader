@@ -244,7 +244,8 @@ app.get('/api/search', async (req, res) => {
     return res.status(status).json({
       success: false,
       error: error.message || 'No se pudo completar la búsqueda',
-      googleUrl: buildGoogleUrl(topic, error.formats)
+      googleUrl: buildGoogleUrl(topic, error.formats),
+      failures: Array.isArray(error.failures) ? error.failures.slice(0, 5) : null
     });
   }
 });
