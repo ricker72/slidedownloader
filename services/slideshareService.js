@@ -759,10 +759,35 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd') {
   };
 
   try {
-    const info = await extractPresentationInfo(normalizedUrl);
+    let info = null;
+    let method = 'lite';
+    let fallbackUsed = false;
 
-    if (info.challengeDetected && !info.imageUrls.length) {
-      throw createServiceError('SlideShare mostró un desafío de seguridad. Intenta nuevamente en unos segundos.', 503);
+    // Intento 1: fetch directo (funciona en serverless, pero SlideShare puede bloquear)
+    try {
+      info = await extractPresentationInfoLite(normalizedUrl);
+      method = 'lite';
+    } catch (error) {
+      console.warn('Fetch directo falló:', error.message);
+    }
+
+    // Intento 2: renderizador externo (si fetch falló o no devolvió imágenes y está configurado)
+    const hasImages = info && info.imageUrls && info.imageUrls.length > 0;
+    const rendererConfigured = Boolean(process.env.RENDERER_URL);
+
+    if (!hasImages && rendererConfigured) {
+      try {
+        info = await extractPresentationInfoViaRenderer(normalizedUrl);
+        method = 'renderer';
+        fallbackUsed = true;
+      } catch (rendererError) {
+        console.warn('Renderizador externo falló:', rendererError.message);
+        // Mantener el info del intento 1 (puede estar vacío)
+      }
+    }
+
+    if (!info) {
+      throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
     }
 
     const imageUrls = dedupeUrls(info.imageUrls).filter(isLikelyImageUrl).slice(0, 60);
