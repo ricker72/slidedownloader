@@ -2,7 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const { chromium } = require('playwright');
+let chromium;
+try {
+  chromium = require('playwright').chromium;
+} catch (error) {
+  chromium = null;
+}
 const PDFDocument = require('pdfkit');
 const PptxGenJS = require('pptxgenjs');
 const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } = require('docx');
@@ -255,6 +260,11 @@ async function downloadBinary(url, redirectCount = 0) {
 }
 
 async function extractPresentationInfo(url) {
+  if (!chromium) {
+    throw new Error(
+      'Playwright/Chromium no está disponible en este entorno serverless. Usa extractPresentationInfoLite (fetch directo) o configura RENDERER_URL para usar un servidor de renderizado externo.'
+    );
+  }
   const browser = await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage']
