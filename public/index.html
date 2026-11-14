@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SlideDownloader - Descargador de Presentaciones</title>
   <meta name="description" content="Descarga presentaciones de SlideShare en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX) con vista previa y calidad HD.">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
@@ -68,6 +68,11 @@
       <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.9"/>
     </symbol>
 
+    <symbol id="i-spark" viewBox="0 0 24 24">
+      <path d="M12 2.5 13.9 9l6.6 1.9-6.6 1.9L12 19.4l-1.9-6.6L3.5 10.9 10.1 9z" fill="currentColor"/>
+      <path d="M18.5 15.5 19.3 18l2.5.8-2.5.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z" fill="currentColor" opacity=".7"/>
+    </symbol>
+
     <symbol id="i-download" viewBox="0 0 24 24">
       <path d="M12 3v11m0 0 4.2-4.2M12 14 7.8 9.8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M4 16.5V18a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
@@ -104,6 +109,17 @@
           </svg>
           <span class="brand-name">Slide<span>Downloader</span></span>
         </a>
+
+        <div class="topbar-actions">
+          <a href="/google" class="topbar-pill" aria-label="Truco Google">
+            <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
+            <span class="topbar-pill-label">Truco Google</span>
+          </a>
+          <a href="/ai" class="topbar-pill topbar-pill--ghost" aria-label="Asistente IA">
+            <svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>
+            <span class="topbar-pill-label">Asistente IA</span>
+          </a>
+        </div>
       </div>
 
       <div class="hero">

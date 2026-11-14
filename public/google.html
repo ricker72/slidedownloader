@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscar archivos PPT y PPTX en Google — SlideDownloader</title>
+  <meta name="description" content="Genera búsquedas de Google con filetype:ppt y filetype:pptx para encontrar presentaciones listas para descargar, sin registro y sin intermediarios.">
+  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="mark-gradient" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#60A5FA"/>
+        <stop offset="55%" stop-color="#2563EB"/>
+        <stop offset="100%" stop-color="#1E40AF"/>
+      </linearGradient>
+    </defs>
+
+    <symbol id="i-pptx" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <text x="15.6" y="25" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#fff">P</text>
+    </symbol>
+
+    <symbol id="i-pdf" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <text x="15.9" y="24.5" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.4" font-weight="700" fill="#fff">PDF</text>
+    </symbol>
+
+    <symbol id="i-link" viewBox="0 0 24 24">
+      <path d="M10.6 13.4a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <path d="M13.4 10.6a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="i-clipboard" viewBox="0 0 24 24">
+      <rect x="7" y="4" width="10" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M10 4.5V3.8A1.8 1.8 0 0 1 11.8 2h.4A1.8 1.8 0 0 1 14 3.8v.7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M10 10h4M10 14h4M10 18h2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="i-scan" viewBox="0 0 24 24">
+      <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.9"/>
+    </symbol>
+
+    <symbol id="i-download" viewBox="0 0 24 24">
+      <path d="M12 3v11m0 0 4.2-4.2M12 14 7.8 9.8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 16.5V18a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="i-shield" viewBox="0 0 24 24">
+      <path d="M12 2.8 4.8 5.6v5.7c0 4.6 3.1 8.3 7.2 9.9 4.1-1.6 7.2-5.3 7.2-9.9V5.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="m8.8 11.8 2.2 2.2 4.4-4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <symbol id="i-bolt" viewBox="0 0 24 24">
+      <path d="M13 2 4.8 13.2a.6.6 0 0 0 .5 1h5.2L10 22l8.2-11.2a.6.6 0 0 0-.5-1h-5.2z" fill="currentColor"/>
+    </symbol>
+
+    <symbol id="i-star" viewBox="0 0 24 24">
+      <path d="M12 2l3.1 3.8L20 9l-3.9 2.8L15 15l-1 3.8L12 12l-5 2.8L9 15l-3.9-2.8L4 9l3.8-1.2z" fill="currentColor"/>
+    </symbol>
+  </svg>
+
+  <header class="hero-header">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="hero-glow hero-glow--one" aria-hidden="true"></div>
+    <div class="hero-glow hero-glow--two" aria-hidden="true"></div>
+
+    <div class="container hero-container">
+      <div class="topbar">
+        <a class="brand" href="/" aria-label="SlideDownloader, inicio">
+          <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+            <rect x="1" y="1" width="42" height="42" rx="13" fill="url(#mark-gradient)"/>
+            <path d="M22 10.5v15.2m0 0 5.6-5.6M22 25.7l-5.6-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13 31.5h18" stroke="rgba(255,255,255,.65)" stroke-width="2.8" stroke-linecap="round"/>
+          </svg>
+          <span class="brand-name">Slide<span>Downloader</span></span>
+        </a>
+
+        <a href="/" class="topbar-pill" aria-label="Volver al descargador">
+          <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+          <span class="topbar-pill-label">Volver al descargador</span>
+        </a>
+      </div>
+
+      <div class="hero">
+        <span class="eyebrow">
+          <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
+          Truco de búsqueda en Google
+        </span>
+        <h1>Encuentra presentaciones <span class="text-gradient">.ppt y .pptx directas</span></h1>
+        <p class="hero-copy">
+          Escribe tu tema y esta página arma la búsqueda exacta con <strong>filetype:ppt</strong> o
+          <strong>filetype:pptx</strong>. Google filtra y te muestra solo archivos listos para descargar, sin registro.
+        </p>
+
+        <ul class="hero-perks" aria-label="Ventajas de la búsqueda">
+          <li><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg> Enlaces directos</li>
+          <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Sin registrarte</li>
+          <li><svg class="icon" aria-hidden="true"><use href="#i-clipboard"/></svg> Copia la búsqueda</li>
+        </ul>
+      </div>
+    </div>
+  </header>
+
+  <main class="google-main">
+    <div class="container main-container">
+
+      <section class="card" aria-labelledby="search-title">
+        <div class="card-header">
+          <div>
+            <h2 id="search-title">Buscar presentaciones para descargar</h2>
+            <p>Elige un tema y los filtros: la búsqueda se abre directamente en Google.</p>
+          </div>
+          <span class="card-chip">
+            <span class="card-chip-dot" aria-hidden="true"></span>
+            2 pasos
+          </span>
+        </div>
+
+        <div class="input-section">
+          <label class="field-label" for="topic-input">Tema de la presentación</label>
+          <div class="input-group">
+            <div class="input-wrapper">
+              <svg class="icon input-icon" aria-hidden="true"><use href="#i-scan"/></svg>
+              <input
+                type="text"
+                id="topic-input"
+                placeholder="Ej: historia de México"
+                autocomplete="off"
+                spellcheck="false"
+              >
+            </div>
+            <button id="search-btn" type="button" class="btn btn-primary">
+              <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
+              Buscar en Google
+            </button>
+          </div>
+          <p class="help-text">Pulsa Enter o el botón: Google mostrará únicamente archivos con el formato elegido.</p>
+
+          <div class="topic-chips chip-select" id="topic-chips" aria-label="Temas de ejemplo">
+            <button type="button" class="chip" data-topic="historia de México">historia de México</button>
+            <button type="button" class="chip" data-topic="biología celular">biología celular</button>
+            <button type="button" class="chip" data-topic="marketing digital">marketing digital</button>
+            <button type="button" class="chip" data-topic="contabilidad financiera">contabilidad financiera</button>
+            <button type="button" class="chip" data-topic="inteligencia artificial">inteligencia artificial</button>
+          </div>
+        </div>
+
+        <div class="filters-section">
+          <div class="option-group">
+            <div class="option-row">
+              <span class="field-label">Formato del archivo</span>
+              <div class="chip-select" id="format-chips" role="group" aria-label="Formato del archivo">
+                <button type="button" class="chip active" data-format="pptx" aria-pressed="true">PPTX</button>
+                <button type="button" class="chip active" data-format="ppt" aria-pressed="true">PPT</button>
+                <button type="button" class="chip" data-format="pdf" aria-pressed="false">PDF</button>
+              </div>
+            </div>
+
+            <div class="option-row">
+              <span class="field-label">Dónde buscar</span>
+              <div class="chip-select" id="scope-chips" role="group" aria-label="Ámbito de la búsqueda">
+                <button type="button" class="chip active" data-scope="all" aria-pressed="true">Todo Internet</button>
+                <button type="button" class="chip" data-scope="edu" aria-pressed="false">Académico</button>
+                <button type="button" class="chip" data-scope="gob" aria-pressed="false">Gobierno</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="extra-options">
+            <label class="checkbox-row">
+              <input type="checkbox" id="opt-exact">
+              <span class="checkbox-check"></span>
+              <span class="checkbox-label">Buscar el tema como frase exacta (más preciso)</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="opt-exclude" checked>
+              <span class="checkbox-check"></span>
+              <span class="checkbox-label">Excluir sitios que piden registro (Studocu, Scribd, Course Hero…)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="query-box">
+          <div class="query-header">
+            <span class="field-label">Búsqueda que se enviará a Google</span>
+            <span class="query-hint">Puedes editarla en Google</span>
+          </div>
+          <code class="query-code" id="query-preview"></code>
+          <div class="query-actions">
+            <button id="copy-btn" type="button" class="btn btn-ghost">
+              <svg class="icon" aria-hidden="true"><use href="#i-clipboard"/></svg>
+              Copiar búsqueda
+            </button>
+            <span class="query-feedback" id="query-feedback" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="shortcuts-title">
+        <div class="card-header">
+          <div>
+            <h2 id="shortcuts-title">Atajos por formato</h2>
+            <p>Un clic para buscar solo ese tipo de archivo con tu tema actual.</p>
+          </div>
+        </div>
+
+        <div class="format-shortcuts">
+          <button type="button" class="shortcut-card" data-shortcut="pptx">
+            <span class="format-icon format-icon--ppt"><svg class="format-svg" aria-hidden="true"><use href="#i-pptx"/></svg></span>
+            <span class="shortcut-text">
+              <span class="shortcut-name">PowerPoint moderno</span>
+              <span class="shortcut-ext">.pptx</span>
+            </span>
+            <span class="shortcut-action">Buscar PPTX</span>
+          </button>
+
+          <button type="button" class="shortcut-card" data-shortcut="ppt">
+            <span class="format-icon format-icon--pot"><svg class="format-svg" aria-hidden="true"><use href="#i-pptx"/></svg></span>
+            <span class="shortcut-text">
+              <span class="shortcut-name">PowerPoint clásico</span>
+              <span class="shortcut-ext">.ppt</span>
+            </span>
+            <span class="shortcut-action">Buscar PPT</span>
+          </button>
+
+          <button type="button" class="shortcut-card" data-shortcut="pdf">
+            <span class="format-icon format-icon--pdf"><svg class="format-svg" aria-hidden="true"><use href="#i-pdf"/></svg></span>
+            <span class="shortcut-text">
+              <span class="shortcut-name">Documento PDF</span>
+              <span class="shortcut-ext">.pdf</span>
+            </span>
+            <span class="shortcut-action">Buscar PDF</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="guide-title">
+        <div class="card-header">
+          <div>
+            <h2 id="guide-title">Cómo reconocer un archivo directo</h2>
+            <p>No todos los resultados son descargables: revisa la URL antes de entrar.</p>
+          </div>
+        </div>
+
+        <div class="guide-layout">
+          <ol class="guide-steps">
+            <li>
+              <span class="guide-number" aria-hidden="true">1</span>
+              <div>
+                <strong>Busca con el filtro de formato.</strong>
+                La búsqueda incluye <code>filetype:</code>, así que Google descarta páginas HTML y blogs.
+              </div>
+            </li>
+            <li>
+              <span class="guide-number" aria-hidden="true">2</span>
+              <div>
+                <strong>Mira la dirección del resultado.</strong>
+                Debe terminar en <code>.ppt</code>, <code>.pptx</code> o <code>.pdf</code>.
+              </div>
+            </li>
+            <li>
+              <span class="guide-number" aria-hidden="true">3</span>
+              <div>
+                <strong>Descarga sin intermediarios.</strong>
+                Si se abre una vista previa, usa su botón de descarga; si pide registro, vuelve y elige otro resultado.
+              </div>
+            </li>
+            <li>
+              <span class="guide-number" aria-hidden="true">4</span>
+              <div>
+                <strong>Regresa a esta página para otro tema.</strong>
+                La búsqueda se guarda en la dirección: puedes compartirla o marcarla.
+              </div>
+            </li>
+          </ol>
+
+          <div class="mock-result" aria-hidden="true">
+            <div class="mock-head">
+              <span class="mock-favicon">W</span>
+              <div class="mock-site">
+                <span class="mock-domain">www.ejemplo.edu.mx</span>
+                <span class="mock-path">https://www.ejemplo.edu.mx/archivos/<mark>historia-de-mexico.pptx</mark></span>
+              </div>
+            </div>
+            <p class="mock-title">Historia de México — Presentación completa</p>
+            <p class="mock-desc">Archivo de PowerPoint con 24 diapositivas listas para descargar.</p>
+            <span class="mock-tag">
+              <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+              Archivo directo
+            </span>
+          </div>
+        </div>
+
+        <p class="guide-warning">
+          <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+          Descarga solo material que puedas usar libremente y respeta los derechos de autor de cada presentación.
+        </p>
+      </section>
+
+      <section class="card card--cta" aria-labelledby="cta-title">
+        <div class="cta-row">
+          <div>
+            <h2 id="cta-title">¿El resultado es de SlideShare?</h2>
+            <p>Pega el enlace en el descargador y obtén PPTX, PDF o Word con la calidad que elijas.</p>
+          </div>
+          <a class="btn btn-primary" href="/">
+            <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+            Abrir descargador
+          </a>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span class="footer-brand">
+        <svg class="brand-mark brand-mark--small" viewBox="0 0 44 44" aria-hidden="true">
+          <rect x="1" y="1" width="42" height="42" rx="13" fill="url(#mark-gradient)"/>
+          <path d="M22 10.5v15.2m0 0 5.6-5.6M22 25.7l-5.6-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M13 31.5h18" stroke="rgba(255,255,255,.65)" stroke-width="2.8" stroke-linecap="round"/>
+        </svg>
+        SlideDownloader
+      </span>
+      <p>&copy; 2026 SlideDownloader. Búsqueda de archivos PPT directos.</p>
+    </div>
+  </footer>
+
+  <script src="google.js?v=2"></script>
+</body>
+</html>
