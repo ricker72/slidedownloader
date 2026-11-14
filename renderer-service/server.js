@@ -1,17 +1,11 @@
 /**
  * Servidor de renderizado externo para SlideDownloader.
+ * Usa Puppeteer (Chromium real) para abrir presentaciones de SlideShare
+ * y extraer título, descripción, autor y URLs de las imágenes de cada diapositiva.
+ * Incluye scroll automático para cargar todas las imágenes (lazy-loading).
  *
- * Este servicio usa Puppeteer (Chromium real) para abrir presentaciones de
- * SlideShare y extraer:
- *   - Título, descripción y autor
- *   - URLs de las imágenes de cada diapositiva (calidad original)
- *
- * NO desplegar en Vercel serverless (Chromium no funciona allí).
+ * NO desplegar en Vercel serverless.
  * Desplegar en: Railway, Render, fly.io, o cualquier VPS con Node.js.
- *
- * Variables de entorno:
- *   PORT - Puerto donde escuchar (default: 3001)
- *   CORS_ORIGIN - Origen permitido para CORS (default: *)
  */
 
 const express = require('express');
@@ -46,6 +40,106 @@ async function getBrowser() {
   return browser;
 }
 
+/**
+ * Hacer scroll por la página para cargar todas las imágenes (lazy-loading)
+ * SlideShare carga las imágenes solo cuando se hace scroll hacia ellas.
+ */
+async function scrollAndLoadImages(page) {
+  console.log('Iniciando scroll para cargar imágenes...');
+
+  const maxScrolls = 60; // Máximo de scrolls para evitar bucle infinito
+  const scrollDelay = 1500; // Espera entre scrolls (ms)
+  const scrollStep = 800; // Píxeles por scroll
+
+  let previousHeight = 0;
+  let currentHeight = await page.evaluate('document.body.scrollHeight');
+
+  for (let i = 0; i < maxScrolls; i++) {
+    // Hacer scroll hacia abajo
+    await page.evaluate((scrollStep) => {
+      window.scrollBy(0, scrollStep);
+    }, scrollStep);
+
+    // Esperar a que carguen las imágenes
+    await new Promise(resolve => setTimeout(resolve, scrollDelay));
+
+    // Verificar si la página creció (cargó más contenido)
+    const newHeight = await page.evaluate('document.body.scrollHeight');
+    if (newHeight === previousHeight && newHeight === currentHeight) {
+      // Si no creció, intentar un scroll final al fondo
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await new Promise(resolve => setTimeout(resolve, scrollDelay));
+      const finalHeight = await page.evaluate('document.body.scrollHeight');
+      if (finalHeight === currentHeight) {
+        console.log(`No hay más contenido después de ${i + 1} scrolls`);
+        break;
+      }
+    }
+
+    previousHeight = currentHeight;
+    currentHeight = newHeight;
+    console.log(`Scroll ${i + 1}: altura ${currentHeight}px`);
+  }
+
+  // Scroll final al inicio para asegurar que todo cargó
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  console.log('Scroll completado');
+}
+
+/**
+ * Extraer información y imágenes de la página cargada
+ */
+async function extractPageData(page) {
+  return await page.evaluate(() => {
+    const addValue = (set, raw) => {
+      if (typeof raw !== 'string') return;
+      const value = raw.trim();
+      if (!value) return;
+      if (value.startsWith('data:image')) return;
+      if (/(jpg|jpeg|png|gif|webp|bmp)/i.test(value)) set.add(value);
+    };
+
+    const imageSet = new Set();
+
+    // Imágenes de <img> y <source>
+    for (const img of document.querySelectorAll('img, source')) {
+      addValue(imageSet, img.currentSrc || img.src || img.dataset.src || img.dataset.original || img.getAttribute('data-full'));
+      addValue(imageSet, img.getAttribute('srcset')?.split(',')[0]?.trim().split(/\s+/)[0]);
+    }
+
+    // URLs de imágenes en scripts
+    const scriptText = Array.from(document.querySelectorAll('script'))
+      .map((node) => node.textContent || '')
+      .join(' ');
+    const matches = scriptText.match(/https?:\/\/[^\s"'<>]+(?:\.(?:jpg|jpeg|png|webp|gif|bmp))(?:\?[^\s"'<>]*)?/gi) || [];
+    for (const match of matches) {
+      addValue(imageSet, match);
+    }
+
+    const title =
+      document.title ||
+      document.querySelector('meta[property="og:title"]')?.content ||
+      document.querySelector('meta[name="twitter:title"]')?.content ||
+      'Presentación';
+
+    const readMeta = (selector) =>
+      document.querySelector(selector)?.getAttribute('content')?.trim() || '';
+
+    return {
+      title,
+      description: readMeta('meta[name="description"]') || readMeta('meta[property="og:description"]') || '',
+      author: readMeta('meta[name="author"]') || readMeta('meta[property="article:author"]') || '',
+      imageUrls: [...imageSet]
+    };
+  });
+}
+
 app.post('/render', async (req, res) => {
   const { url } = req.body || {};
 
@@ -68,55 +162,19 @@ app.post('/render', async (req, res) => {
       'Upgrade-Insecure-Requests': '1'
     });
 
-    // Esperar a que cargue el DOM, no necesitamos JS completo
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: 60000
     });
 
-    // Pequeña pausa para que carguen las imágenes del primer render
-    await new Promise((r) => setTimeout(r, 2000));
+    // Espera inicial para que cargue el contenido base
+    await new Promise((r) => setTimeout(r, 3000));
 
-    const result = await page.evaluate(() => {
-      const addValue = (set, raw) => {
-        if (typeof raw !== 'string') return;
-        const value = raw.trim();
-        if (!value) return;
-        if (value.startsWith('data:image')) return;
-        if (/(jpg|jpeg|png|gif|webp|bmp)/i.test(value)) set.add(value);
-      };
+    // Hacer scroll para cargar todas las imágenes (lazy-loading)
+    await scrollAndLoadImages(page);
 
-      const imageSet = new Set();
-
-      for (const img of document.querySelectorAll('img, source')) {
-        addValue(imageSet, img.currentSrc || img.src || img.dataset.src || img.dataset.original || img.getAttribute('data-full'));
-        addValue(imageSet, img.getAttribute('srcset')?.split(',')[0]?.trim().split(/\s+/)[0]);
-      }
-
-      const scriptText = Array.from(document.querySelectorAll('script'))
-        .map((node) => node.textContent || '')
-        .join(' ');
-      const matches = scriptText.match(/https?:\/\/[^\s"'<>]+(?:\.(?:jpg|jpeg|png|webp|gif|bmp))(?:\?[^\s"'<>]*)?/gi) || [];
-      for (const match of matches) {
-        addValue(imageSet, match);
-      }
-
-      const title =
-        document.title ||
-        document.querySelector('meta[property="og:title"]')?.content ||
-        document.querySelector('meta[name="twitter:title"]')?.content ||
-        'Presentación';
-
-      const readMeta = (selector) =>
-        document.querySelector(selector)?.getAttribute('content')?.trim() || '';
-
-      return {
-        title,
-        description: readMeta('meta[name="description"]') || readMeta('meta[property="og:description"]') || '',
-        author: readMeta('meta[name="author"]') || readMeta('meta[property="article:author"]') || '',
-        imageUrls: [...imageSet]
-      };
-    });
+    // Extraer datos
+    const result = await extractPageData(page);
 
     // Deduplicar y filtrar
     const deduped = [...new Set(result.imageUrls.filter(Boolean))];
@@ -125,9 +183,9 @@ app.post('/render', async (req, res) => {
     // Detectar challenge de SlideShare
     const challengeDetected =
       /verify you are human|check your browser|captcha|bot detected|access denied|security check|challenge/i.test(
-        (document.body && document.body.innerText) || ''
+        (await page.evaluate(() => document.body.innerText)) || ''
       ) ||
-      !!document.querySelector('iframe[src*="captcha"], #challenge-stage, .recaptcha');
+      (await page.evaluate(() => !!document.querySelector('iframe[src*="captcha"], #challenge-stage, .recaptcha')));
 
     return res.json({
       success: true,
