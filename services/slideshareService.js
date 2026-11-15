@@ -701,9 +701,12 @@ async function extractPresentationInfoViaRenderer(url) {
  * Descarga las imágenes en paralelo (con límite) conservando el orden original.
  * En Vercel, descargar decenas de diapositivas en serie puede agotar el tiempo
  * máximo de ejecución de la función.
+ *
+ * Cada elemento de la lista puede ser una URL o un objeto `{ buffer, mime }`
+ * ya materializado (por ejemplo, una página reconstruida por otro servicio).
  */
-async function downloadImagesConcurrently(imageUrls, quality, concurrency = 10) {
-  const list = Array.isArray(imageUrls) ? imageUrls : [];
+async function downloadImagesConcurrently(imageItems, quality, concurrency = 10) {
+  const list = Array.isArray(imageItems) ? imageItems : [];
   const results = new Array(list.length).fill(null);
   let cursor = 0;
 
@@ -712,11 +715,19 @@ async function downloadImagesConcurrently(imageUrls, quality, concurrency = 10) 
       const index = cursor;
       cursor += 1;
 
+      const item = list[index];
+
       try {
-        const buffer = await downloadImage(list[index], quality);
-        results[index] = { url: list[index], buffer, mime: detectImageMime(buffer) };
+        if (item && typeof item === 'object' && Buffer.isBuffer(item.buffer)) {
+          const mime = item.mime || detectImageMime(item.buffer);
+          results[index] = { url: item.url || `page-${index + 1}`, buffer: item.buffer, mime };
+          continue;
+        }
+
+        const buffer = await downloadImage(item, quality);
+        results[index] = { url: item, buffer, mime: detectImageMime(buffer) };
       } catch (error) {
-        console.warn(`No se pudo descargar la imagen ${list[index]}:`, error.message);
+        console.warn(`No se pudo descargar la imagen ${item}:`, error.message);
       }
     }
   });

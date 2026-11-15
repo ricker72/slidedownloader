@@ -1,86 +1,75 @@
+/**
+ * Endpoints de Scribd.
+ *
+ * - GET  /api/scribd/inspect?url=...   → metadatos del documento (sin generar archivo)
+ * - POST /api/scribd/download           → genera el archivo y devuelve su URL
+ *
+ * Solo se usan las vistas públicas que Scribd entrega a cualquier visitante:
+ * sin cookies, sin cuenta y sin credenciales.
+ */
+
 const express = require('express');
 const router = express.Router();
+
 const scribdService = require('../services/scribdService');
+const {
+  scribdInspectLimiter,
+  scribdDownloadLimiter
+} = require('../middleware/rateLimiter');
 
-// Ruta para procesar un enlace de Scribd (similar a docdownloader.com)
-router.post('/process', async (req, res) => {
-  try {
-    const { url } = req.body || {};
-    
-    if (!url) {
-      return res.json({ error: 'URL de Scribd requerida' });
-    }
+function sendError(res, error) {
+  const status = Number(error.status) || 500;
 
-    // Procesar el enlace de Scribd
-    const result = await scribdService.processScribdDownload(url);
-    
-    res.json({
-      success: result.success,
-      document: result.document
+  if (status >= 500) {
+    console.error('Error en /api/scribd:', error.message);
+  }
+
+  // En producción no se exponen detalles internos en los errores 500.
+  const message =
+    status >= 500 && process.env.NODE_ENV === 'production'
+      ? 'Error interno del servidor'
+      : error.message || 'No se pudo procesar el documento de Scribd';
+
+  return res.status(status).json({ success: false, error: message });
+}
+
+router.get('/inspect', scribdInspectLimiter, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  const rawUrl = req.query.url;
+
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Se requiere el parámetro url con un enlace de Scribd'
     });
+  }
+
+  try {
+    const document = await scribdService.inspect(rawUrl);
+    return res.json({ success: true, document });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return sendError(res, error);
   }
 });
 
-// Ruta para buscar documentos en Scribd
-router.get('/search', async (req, res) => {
-  try {
-    const query = req.query.q || '';
-    
-    if (!query) {
-      return res.json({ error: 'Término de búsqueda requerido' });
-    }
+router.post('/download', scribdDownloadLimiter, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
 
-    const result = await scribdService.searchDocuments(query);
-    
-    res.json({
-      success: result.success,
-      query: result.query,
-      totalResults: result.totalResults,
-      documents: result.documents
+  const { url, format } = req.body || {};
+
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Se requiere el enlace del documento de Scribd'
     });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
-});
 
-// Ruta para verificar estado de un documento de Scribd
-router.get('/status', async (req, res) => {
   try {
-    const { url } = req.query || {};
-    
-    if (!url) {
-      return res.json({ error: 'URL de documento requerida' });
-    }
-
-    const result = await scribdService.getDocumentStatus(url);
-    
-    res.json({
-      success: result.success,
-      info: result.info
-    });
+    const result = await scribdService.download({ url, format });
+    return res.json({ success: true, ...result });
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Ruta para verificar acceso público a un documento
-router.get('/check', async (req, res) => {
-  try {
-    const url = req.query.url || '';
-    if (!url) {
-      return res.json({ error: 'URL de documento requerida' });
-    }
-
-    scribdService.checkPublicDocument(url, (err, result) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(result);
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    return sendError(res, error);
   }
 });
 

@@ -51,6 +51,7 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 | 👁️ **Vista previa** | Grid de miniaturas antes de descargar | ✅ Disponible |
 | 🔄 **Calidad HD/SD** | Selector de resolución de imagen | ✅ Disponible |
 | 🤖 **Asistente IA** | Genera prompts profesionales para recrear presentaciones | ✅ Disponible |
+| 📄 **Documentos de Scribd** | Descarga documentos públicos en PDF, PPTX, PPSX, POTX y DOCX | ✅ Disponible |
 | 🌐 **Detección automática** | Analiza la URL al pegarla en el input | ✅ Disponible |
 | 📱 **Responsive** | Adaptado a móvil, tablet y desktop | ✅ Disponible |
 | 🌍 **Multilenguaje** | Español, Inglés y Portugués | ✅ Disponible |
@@ -76,6 +77,34 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 | ![jszip](https://img.shields.io/badge/JSZip-3.x-0066CC?style=flat-square) | Utilidad | 3.x | Manipulación de archivos ZIP/OOXML |
 
 </div>
+
+## 📄 Descargas de Scribd
+
+La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y elige el formato.
+
+**Cómo funciona**
+
+1. Se lee el visor embebido público (`/embeds/{id}/content`), la misma vista que Scribd entrega a cualquier visitante.
+2. Se obtiene el manifiesto de páginas de `/document_downloads/{id}` y se elige el que contiene más páginas.
+3. Cada página se materializa como imagen: se usa la imagen renderizada del CDN cuando existe; si el documento solo tiene capa de texto, la página se reconstruye y se rasteriza con `sharp`.
+4. El archivo final se genera con el mismo pipeline que SlideShare (PDFKit, PptxGenJS y docx).
+
+**Límites y avisos**
+
+- Solo documentos públicos. No se usa login, cookies ni credenciales, y no se resuelve ningún mecanismo de autenticación.
+- Máximo **60 páginas** por descarga.
+- Si el autor no permite la descarga, la API responde `403`.
+- Los documentos cuyo texto está protegido por sustitución de caracteres se rechazan con `422`: reconstruirlos produciría texto ilegible.
+- Los documentos retirados o inexistentes responden `404`.
+- Descarga únicamente material sobre el que tengas derechos. Respeta los términos de Scribd y los derechos de autor.
+- En Vercel el sistema de archivos solo permite `/tmp` y las funciones tienen un límite de ejecución de 60 s; los archivos grandes pueden requerir ejecutar el proyecto en un servidor propio.
+
+**API**
+
+| Método | Ruta | Descripción |
+|:---|:---|:---|
+| `GET` | `/api/scribd/inspect?url=` | Metadatos del documento: título, páginas, formatos y permiso de descarga |
+| `POST` | `/api/scribd/download` | Genera el archivo. Cuerpo: `{ "url": "...", "format": "pdf" }` |
 
 ## 🔎 Configuración del filtro de Google
 

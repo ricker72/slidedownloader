@@ -74,6 +74,18 @@ const fileLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20 });
 const searchConfigLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30 });
 const pingLimiter = rateLimiter({ windowMs: 60 * 1000, max: 60 });
 
+// Scribd: cada análisis o descarga hace varias peticiones al CDN externo.
+const scribdInspectLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Demasiados análisis de Scribd. Espera unos minutos antes de reintentar.'
+});
+const scribdDownloadLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: 'Demasiadas descargas de Scribd. Espera unos minutos antes de reintentar.'
+});
+
 module.exports = {
   rateLimiter,
   apiLimiter,
@@ -82,5 +94,7 @@ module.exports = {
   promptLimiter,
   fileLimiter,
   searchConfigLimiter,
-  pingLimiter
+  pingLimiter,
+  scribdInspectLimiter,
+  scribdDownloadLimiter
 };

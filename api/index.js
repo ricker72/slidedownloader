@@ -9,12 +9,11 @@
  * - El sistema de archivos es de solo lectura excepto /tmp.
  *   Los archivos generados se guardan en /tmp y se pierden al terminar la invocación.
  *   Idealmente devolver el archivo en la misma respuesta o usar Vercel Blob / S3.
+ *
+ * Los routers adicionales (/api/scribd, etc.) se montan dentro de
+ * server/app.js para que funcionen igual en local y en Vercel.
  */
 
 const app = require('../server/app.js');
-const scribdRouter = require('../api/scribd');
-
-// Monta los endpoints de Scribd bajo /api/scribd
-app.use('/api/scribd', scribdRouter);
 
 module.exports = app;

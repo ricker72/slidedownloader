@@ -20,6 +20,7 @@ const {
   pingLimiter
 } = require('../middleware/rateLimiter');
 const { securityHeaders } = require('../middleware/securityHeaders');
+const scribdRouter = require('../api/scribd');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -220,6 +221,28 @@ app.use(express.static(publicDir, {
 
 app.use(securityHeaders);
 
+// Rechazar rutas con segmentos ".." antes de que Express las normalice.
+// Sin esto, `/download/../../../etc/passwd` se resuelve como un 404 genérico
+// y oculta un intento de path traversal.
+app.use((req, res, next) => {
+  let pathname = req.originalUrl || '';
+  const queryIndex = pathname.indexOf('?');
+  if (queryIndex !== -1) pathname = pathname.slice(0, queryIndex);
+
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return res.status(400).json({ success: false, error: 'Ruta no válida' });
+  }
+
+  if (/(?:^|\/)\.\.(?:\/|$)/.test(decoded) || decoded.includes('\0')) {
+    return res.status(400).json({ success: false, error: 'Ruta no válida' });
+  }
+
+  return next();
+});
+
 app.use((req, res, next) => {
   const allowedOrigins = String(process.env.ALLOWED_ORIGINS || 'http://localhost:8080')
     .split(',')
@@ -247,6 +270,11 @@ app.get('/', (req, res) => {
 app.get('/ai', (req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(publicDir, 'ai.html'));
+});
+
+app.get('/scribd', (req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(publicDir, 'scribd.html'));
 });
 
 app.get('/google', (req, res) => {
@@ -604,17 +632,15 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
 });
 
 app.get('/download/:jobId/:filename', (req, res) => {
-// Validar que jobId sea un UUID v4 para prevenir path traversal o inyección.
-  // Esta validación debe venir PRIMERO, antes que cualquier path.resolve o fs.existsSync.
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(jobId)) {
-    return res.status(400).json({ success: false, error: 'ID de trabajo inválido' });
-  }
   const { jobId, filename } = req.params;
-  const root = path.resolve(downloadsDir);
-// Validar que jobId sea un UUID v4 para prevenir path traversal o inyección.
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(jobId)) {
+
+  // Validar que jobId sea un UUID v4 para prevenir path traversal o inyección.
+  // Esta validación debe venir PRIMERO, antes que cualquier path.resolve o fs.existsSync.
+  if (!validarJobId(jobId)) {
     return res.status(400).json({ success: false, error: 'ID de trabajo inválido' });
   }
+
+  const root = path.resolve(downloadsDir);
   const filePath = path.resolve(root, jobId, filename);
   const safeName = path.basename(filename);
 
@@ -632,6 +658,8 @@ app.get('/download/:jobId/:filename', (req, res) => {
 
   return res.download(filePath, safeName);
 });
+
+app.use('/api/scribd', scribdRouter);
 
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) {
