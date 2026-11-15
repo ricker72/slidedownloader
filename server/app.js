@@ -1,3 +1,6 @@
+function validarJobId(jobId) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(jobId);
+}
 const express = require('express');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -7,6 +10,16 @@ const { Readable } = require('stream');
 const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
 const { getGoogleCseId } = require('../services/presentationSearch');
+const {
+  apiLimiter,
+  inspectLimiter,
+  downloadLimiter,
+  promptLimiter,
+  fileLimiter,
+  searchConfigLimiter,
+  pingLimiter
+} = require('../middleware/rateLimiter');
+const { securityHeaders } = require('../middleware/securityHeaders');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -177,7 +190,18 @@ function cacheInspection(slideUrl, payload) {
 app.disable('x-powered-by');
 app.set('trust proxy', true);
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'https:', 'data:'],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      frameSrc: ['https://docs.google.com', 'https://view.officeapps.live.com'],
+      connectSrc: ["'self'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"]
+    }
+  },
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(morgan('combined'));
@@ -194,8 +218,18 @@ app.use(express.static(publicDir, {
   }
 }));
 
+app.use(securityHeaders);
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = String(process.env.ALLOWED_ORIGINS || 'http://localhost:8080')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const origin = req.headers.origin || '';
+
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
@@ -230,7 +264,7 @@ app.get('/filtro', (req, res) => {
   res.sendFile(path.join(publicDir, 'google.html'));
 });
 
-app.get('/api/search/config', (req, res) => {
+app.get('/api/search/config', searchConfigLimiter, (req, res) => {
   res.set('Cache-Control', 'no-store');
 
   const engineId = getGoogleCseId();
@@ -244,7 +278,7 @@ app.get('/api/search/config', (req, res) => {
   return res.json({ success: true, engineId });
 });
 
-app.get('/api/file', async (req, res) => {
+app.get('/api/file', fileLimiter, async (req, res) => {
   const target = parseDirectFileUrl(req.query.url);
 
   if (!target) {
@@ -332,15 +366,15 @@ app.get('/api/file', async (req, res) => {
 });
 
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', pingLimiter, (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.post('/api/ping', async (req, res) => {
+app.post('/api/ping', pingLimiter, async (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.post('/api/inspect', async (req, res) => {
+app.post('/api/inspect', inspectLimiter, async (req, res) => {
   try {
     const { url } = req.body || {};
     const slideUrl = normalizeSlideShareUrl(url);
@@ -435,7 +469,7 @@ app.post('/api/inspect', async (req, res) => {
   }
 });
 
-app.post('/api/prompt', async (req, res) => {
+app.post('/api/prompt', promptLimiter, async (req, res) => {
   try {
     const { url, analysis, options } = req.body || {};
     const normalizedUrl = url || analysis?.url || '';
@@ -507,7 +541,7 @@ app.post('/api/prompt', async (req, res) => {
   }
 });
 
-app.post('/api/download', async (req, res) => {
+app.post('/api/download', downloadLimiter, async (req, res) => {
   try {
     const { url, format, quality, imageUrls, title } = req.body || {};
 
@@ -554,19 +588,33 @@ app.post('/api/download', async (req, res) => {
 
     // Los errores 4xx son peticiones inválidas; solo se registran los 5xx.
     if (status >= 500) {
-      console.error('Error en /api/download:', error);
+      console.error('Error en /api/download:', error.message);
     }
+
+    // En producción, no exponer detalles internos en errores 500.
+    const errorMessage = process.env.NODE_ENV === 'production'
+      ? 'Error interno del servidor'
+      : error.message || 'Error al generar la descarga';
 
     return res.status(status).json({
       success: false,
-      error: error.message || 'Error al generar la descarga'
+      error: errorMessage
     });
   }
 });
 
 app.get('/download/:jobId/:filename', (req, res) => {
+// Validar que jobId sea un UUID v4 para prevenir path traversal o inyección.
+  // Esta validación debe venir PRIMERO, antes que cualquier path.resolve o fs.existsSync.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(jobId)) {
+    return res.status(400).json({ success: false, error: 'ID de trabajo inválido' });
+  }
   const { jobId, filename } = req.params;
   const root = path.resolve(downloadsDir);
+// Validar que jobId sea un UUID v4 para prevenir path traversal o inyección.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(jobId)) {
+    return res.status(400).json({ success: false, error: 'ID de trabajo inválido' });
+  }
   const filePath = path.resolve(root, jobId, filename);
   const safeName = path.basename(filename);
 

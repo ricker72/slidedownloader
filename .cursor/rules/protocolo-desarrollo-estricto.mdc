@@ -1,0 +1,85 @@
+---
+description: Protocolo de Desarrollo Estricto - ACTIVACIÓN AUTOMÁTICA en toda tarea de implementación
+globs: **/*
+alwaysApply: true
+---
+
+# 🛡️ PROTOCOLO DE DESARROLLO ESTRICTO (ACTIVACIÓN AUTOMÁTICA)
+
+Este archivo de reglas se activa **automáticamente en cada tarea de implementación, refactorización o corrección de errores** sobre este repositorio. No requiere que el usuario lo solicite.
+
+**REGLA DE ORO: NUNCA escribas código de producción antes de completar la Fase 2 y recibir aprobación explícita ("Aprobado").**
+
+---
+
+## 🔄 FLUJO OBLIGATORIO (4 fases en orden estricto)
+
+Cuando un usuario pide implementar algo, **debes iniciar automáticamente en Fase 1**. No esperes instrucciones adicionales.
+
+---
+
+## FASE 1: Análisis y Diagnóstico
+
+Antes de tocar cualquier archivo:
+
+1. **Lee los archivos relevantes** del proyecto para entender la arquitectura actual, dependencias y convenciones de estilo (este proyecto usa Node.js + Express, CommonJS, tests con `node:test`, servicios modulares en `/services`, frontend vanilla en `/public`).
+2. **Resume cómo funciona el flujo actual** relacionado con la tarea.
+3. **Identifica posibles efectos secundarios, riesgos o cuellos de botella** (seguridad, rendimiento, rutas de archivos, compatibilidad Vercel/serverless, manejo de errores).
+
+**Salida esperada:** Un breve diagnóstico técnico. Luego **detente y pregunta** si el entendimiento es correcto antes de continuar.
+
+**Mensaje de inicio obligatorio (envía esto automáticamente al comenzar):**
+> "Actúa bajo el Protocolo de Desarrollo. Inicia la Fase 1 para [descripción de tu tarea]. No escribas código todavía."
+
+---
+
+## FASE 2: Plan de Implementación (Design Doc)
+
+1. Crea un plan paso a paso detallando los **archivos exactos** que se van a crear o modificar.
+2. Define los cambios en **interfaces, tipos de datos o esquemas**.
+3. Describe la **estrategia de pruebas** (unitarias o de integración con `node:test`).
+
+**Salida esperada:** Lista numerada y atómica de tareas. **Detente aquí y pide confirmación explícita ("Aprobado") antes de escribir código.**
+
+**Mensaje de revisión (envía esto tras la Fase 1):**
+> "El análisis es correcto. Pasa a la Fase 2 y dame el plan de implementación."
+
+---
+
+## FASE 3: Ejecución, Auditoría con Skills y Corrección
+
+1. Implementa los cambios siguiendo **exactamente** el plan aprobado.
+2. **Uso obligatorio de Skills/Herramientas:** Ejecuta las herramientas disponibles (linters, análisis estático, búsqueda de documentación, revisión de seguridad) sobre el código recién escrito.
+3. Si las herramientas reportan errores, advertencias o malas prácticas, **corrígelos inmediatamente** y vuelve a auditar hasta que el análisis esté limpio.
+
+**Mensaje de aprobación (envía esto tras aprobar el plan):**
+> "Plan aprobado. Ejecuta la Fase 3 (usa el linter para verificar errores) y termina con el build de la Fase 4."
+
+---
+
+## FASE 4: Build y Verificación Final
+
+1. Ejecuta el comando de compilación (`npm start` / build) y la suite de pruebas (`npm test`).
+2. Si el build falla, analiza el log de error, vuelve a la Fase 3 para corregir y repite el build.
+3. Solo entrega la tarea como terminada cuando el build sea **100% exitoso y sin errores de tipos**.
+
+---
+
+## 🚫 REGLAS DE CONDUCTA (incumplimiento bloquea la entrega)
+
+- **No divagues, no inventes código, no hagas "vibe coding".** Cada línea debe tener justificación técnica y responder al plan aprobado.
+- **Primero ejecuta pruebas reales, corrige errores, luego sugiere y aplica mejoras.**
+- Trabaja con la **metodología estructurada de ingenieros de Google** (diseño antes de implementación, revisiones, pruebas automatizadas, monitoreo de errores).
+- Apóyate en skills que analicen el código desde **diferentes perspectivas** (funcional, seguridad, rendimiento, compatibilidad) para implementar mejoras sin dañar el proyecto.
+- Mantén las convenciones del proyecto: CommonJS (`require`/`module.exports`), nombres en español para servicios/utiles cuando exista, manejo de errores con `createServiceError`, validación de entradas, rutas absolutas con `path.join`, soporte a Vercel (solo lectura excepto `/tmp`).
+
+---
+
+## ✅ CRITERIOS DE FINALIZACIÓN
+
+La tarea solo se considera completa cuando:
+1. Se cumplieron las 4 fases en orden.
+2. El usuario dijo "Aprobado" al plan de la Fase 2.
+3. El código pasó auditoría de skills (funcional, seguridad, rendimiento, compatibilidad).
+4. `npm test` pasa al 100%.
+5. El servidor inicia sin errores y no hay errores de tipos.

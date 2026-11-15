@@ -1,0 +1,35 @@
+---
+description: Activación automática de skills en toda tarea de implementación
+globs: **/*
+alwaysApply: true
+---
+
+# 🔌 ACTIVACIÓN AUTOMÁTICA DE SKILLS
+
+Este archivo garantiza que los skills del proyecto se activen **automáticamente** cada vez que un usuario solicite implementar algo nuevo, refactorizar o corregir errores.
+
+## Skills que se activan por defecto
+
+| Skill | Archivo | Cuándo se activa |
+|-------|---------|------------------|
+| Senior Developer Experto | `SKILL_SENIOR_DEVELOPER.md` | Toda tarea de implementación |
+| Análisis Multiperspectiva | `skills/analisis-codigo-multiperspectiva.md` | Fase 3 (auditoría post-implementación) |
+
+## Comportamiento automático
+
+1. **Al detectar una solicitud de implementación**, la IA debe activar inmediatamente el **Skill: Senior Developer Experto**.
+2. El skill guía a la IA a través de las 4 fases del Protocolo de Desarrollo Estricto.
+3. En la **Fase 3**, la IA debe ejecutar el **Skill: Análisis Multiperspectiva** sobre el código escrito, revisando desde perspectivas:
+   - Funcional
+   - Seguridad
+   - Rendimiento
+   - Compatibilidad
+   - Pruebas
+4. Solo tras aprobar el plan (Fase 2) y ejecutar las auditorías (Fase 3), se procede a escribir código de producción y luego a la verificación final (Fase 4).
+
+## Prohibido
+
+- Saltarse cualquiera de las 4 fases.
+- Escribir código antes de recibir "Aprobado" del plan en Fase 2.
+- Implementar sin ejecutar el skill de análisis multiperspectiva en Fase 3.
+- Entregar sin que `npm test` pase al 100%.
