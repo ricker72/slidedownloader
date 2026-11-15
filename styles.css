@@ -1,0 +1,281 @@
+/* ============================================================
+   SlideDownloader - Estilos Personalizados
+   ============================================================ */
+
+/* ============================================================
+   Botones de la barra superior
+   ============================================================ */
+
+.topbar-pill {
+  display: inline-block;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.topbar-pill-label {
+  display: inline-flex;
+  align-items: center;
+  background-color: #eaecf1;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #58606e;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.topbar-pill-label:hover {
+  background-color: #d1d5db;
+  color: #1a1a1a;
+}
+
+.topbar-pill-label.active {
+  background-color: #2563eb;
+  color: white;
+}
+
+/* Íconos de los botones */
+.topbar-pill-label use {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* ============================================================
+   Panel Scribd
+   ============================================================ */
+
+.scribd-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 320px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.scribd-panel.visible {
+  opacity: 1;
+}
+
+.scribd-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #f8f9fa;
+}
+
+.scribd-panel-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.scribd-panel-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #718096;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.scribd-panel-close:hover {
+  background-color: #edf2f7;
+  color: #1a1a1a;
+}
+
+.scribd-panel-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ============================================================
+   Formulario del panel Scribd
+   ============================================================ */
+
+.scribd-panel-body {
+  padding: 16px;
+}
+
+.scribd-url-group {
+  margin-bottom: 12px;
+}
+
+.scribd-url-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #718096;
+  margin-bottom: 4px;
+}
+
+.scribd-url-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.scribd-url-input:focus {
+  border-color: #3182ce;
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15);
+}
+
+.scribd-url-input::placeholder {
+  color: #a0aec0;
+}
+
+/* ============================================================
+   Botones del panel Scribd
+   ============================================================ */
+
+.scribd-panel-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.scribd-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.scribd-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #cbd5e0;
+}
+
+.scribd-btn:hover {
+  transform: translateY(-1px);
+}
+
+.scribd-btn:active {
+  transform: translateY(0);
+}
+
+.scribd-btn-primary {
+  background-color: #3182ce;
+  color: white;
+}
+
+.scribd-btn-primary:hover {
+  background-color: #2c5aa0;
+}
+
+.scribd-btn-secondary {
+  background-color: #edf2f7;
+  color: #4a5568;
+  border: 1px solid #d2dfea;
+}
+
+.scribd-btn-secondary:hover {
+  background-color: #e2e8f0;
+}
+
+.scribd-btn-danger {
+  background-color: #e53e3e;
+  color: white;
+}
+
+.scribd-btn-danger:hover {
+  background-color: #c53030;
+}
+
+/* ============================================================
+   Estado/resultado del procesamiento
+   ============================================================ */
+
+.scribd-status {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.scribd-status-success {
+  background-color: #f0fff4;
+  color: #38a169;
+}
+
+.scribd-status-error {
+  background-color: #fed7d7;
+  color: #e53e3e;
+}
+
+.scribd-status-warning {
+  background-color:#faf089;
+  color: #d69e2e;
+}
+
+.scribd-status-hidden {
+  display: none;
+}
+
+/* ============================================================
+   Galería/resultado del documento
+   ============================================================ */
+
+.scribd-document-info {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 12px;
+  background-color: #fafafa;
+}
+
+.scribd-document-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.scribd-document-meta {
+  font-size: 11px;
+  color: #718096;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 640px) {
+  .topbar-pill {
+    margin-left: 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  .scribd-panel {
+    width: 100%;
+    top: 12px;
+    right: 0;
+    left: 0;
+    margin: 0 4px;
+  }
+}

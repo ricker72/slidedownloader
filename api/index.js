@@ -12,5 +12,9 @@
  */
 
 const app = require('../server/app.js');
+const scribdRouter = require('../api/scribd');
+
+// Monta los endpoints de Scribd bajo /api/scribd
+app.use('/api/scribd', scribdRouter);
 
 module.exports = app;
