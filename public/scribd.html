@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Descargar documentos de Scribd — SlideDownloader</title>
   <meta name="description" content="Descarga documentos públicos de Scribd en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX). Hasta 60 páginas, sin cuenta y sin cookies.">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=13">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
@@ -161,8 +161,8 @@
           </span>
         </div>
 
-        <form id="scribd-form" class="input-section" novalidate>
-          <label class="field-label" for="scribd-url">URL del documento</label>
+        <form id="scribd-form" class="input-section scribd-form" novalidate>
+          <label class="field-label" for="scribd-url">Enlace del documento</label>
           <div class="input-group">
             <div class="input-wrapper">
               <svg class="icon input-icon" aria-hidden="true"><use href="#i-link"/></svg>
@@ -170,9 +170,10 @@
                 type="url"
                 id="scribd-url"
                 class="scribd-url-input"
-                placeholder="https://es.scribd.com/document/..."
+                placeholder="Pega aquí el enlace de Scribd"
                 spellcheck="false"
                 autocomplete="url"
+                aria-describedby="scribd-url-help"
               >
             </div>
             <button id="scribd-inspect-btn" type="submit" class="btn btn-soft">
@@ -180,7 +181,9 @@
               Analizar
             </button>
           </div>
-          <p class="help-text">Solo documentos públicos de scribd.com. Los enlaces privados o de otros sitios se rechazan.</p>
+          <p class="help-text" id="scribd-url-help">
+            Ejemplo: https://es.scribd.com/document/123456789/mi-documento · Solo documentos públicos.
+          </p>
         </form>
 
         <div class="scribd-document" id="scribd-document" hidden>
