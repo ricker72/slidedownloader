@@ -1195,6 +1195,9 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
         pageCount: images.length,
         totalPages: context.pages.length,
         fileName: result.filename,
+        filePath: result.outputFile,
+        // Se conserva por compatibilidad con clientes antiguos; la API ya
+        // envía el archivo en la misma respuesta y borra el trabajo.
         downloadUrl: `/download/${jobId}/${result.filename}`,
         warnings,
         sourceUrl: context.canonicalUrl

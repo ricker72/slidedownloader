@@ -372,16 +372,39 @@ async function handleDownload() {
       body: JSON.stringify(payload),
     });
 
-    const data = await readJson(response);
-
-    if (response.ok && data.success) {
-      showStatus('success', 'Descarga lista');
-      showDownloadLink(data, url);
-    } else {
-      const message = data.error || 'Error al procesar la descarga';
+    if (!response.ok) {
+      const message = await DownloadUtils.readErrorMessage(
+        response,
+        'Error al procesar la descarga'
+      );
       showStatus('error', message);
       showErrorMessage(message);
+      return;
     }
+
+    if (DownloadUtils.isJsonResponse(response)) {
+      // Respuesta inesperada del servidor (por ejemplo, un proxy intermedio).
+      const data = await readJson(response);
+      const message = data.error || 'El servidor no devolvió el archivo generado';
+      showStatus('error', message);
+      showErrorMessage(message);
+      return;
+    }
+
+    const metadata = DownloadUtils.readMetadata(response);
+    const { fileName } = await DownloadUtils.saveResponseAsFile(
+      response,
+      `presentacion.${currentFormat}`
+    );
+
+    showStatus('success', 'Descarga lista');
+    showDetail([
+      ['Título', metadata.title || lastInspect?.title || ''],
+      ['Formato', getFormatName(metadata.format || currentFormat)],
+      ['Calidad', getQualityName(metadata.quality || currentQuality)],
+      ['Diapositivas', metadata.slideCount != null ? String(metadata.slideCount) : ''],
+      ['Archivo', fileName],
+    ]);
   } catch (error) {
     showStatus('error', 'Error de conexión');
     showErrorMessage('No se pudo contactar con el servidor.');
@@ -451,33 +474,6 @@ function showErrorMessage(message) {
   paragraph.className = 'error-text';
   paragraph.textContent = message;
   statusDetail.append(paragraph);
-}
-
-/**
- * Mostrar enlace de descarga y lanzarla.
- */
-function showDownloadLink(data, fallbackUrl) {
-  showDetail([
-    ['Título', data.title],
-    ['Formato', getFormatName(data.format)],
-    ['Calidad', getQualityName(data.quality)],
-    ['Diapositivas', data.slideCount != null ? String(data.slideCount) : ''],
-    ['URL', fallbackUrl],
-  ]);
-
-  if (!data.downloadUrl) return;
-
-  const link = document.createElement('a');
-  link.className = 'btn btn-primary';
-  link.href = data.downloadUrl;
-  link.textContent = 'Descargar archivo';
-
-  // El atributo download no funciona en todos los navegadores con rutas
-  // del mismo origen, pero no rompe nada si se ignora.
-  link.setAttribute('download', '');
-
-  statusDetail.append(link);
-  link.click();
 }
 
 /**

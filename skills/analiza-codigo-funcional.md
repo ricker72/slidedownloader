@@ -33,7 +33,7 @@ Se ejecuta en la **Fase 3** del Protocolo de Desarrollo Estricto, después de im
 - [ ] ¿Se validan todas las entradas de `req.body`, `req.query`, `req.params` antes de usarlas?
 - [ ] ¿Se valida que las URLs sean de SlideShare mediante `normalizeSlideShareUrl`?
 - [ ] ¿Los nombres de archivo se sanitizan con `sanitizeFileName`?
-- [ ] ¿Las respuestas incluyen campos esperados (`title`, `format`, `quality`, `imageCount`, `downloadUrl`, `fileName`)?
+- [ ] ¿Las respuestas incluyen los campos esperados (`title`, `format`, `quality`, `imageCount`, `fileName`) o envían el archivo con sus cabeceras `X-Download-*`?
 
 ### 4. Frontend
 - [ ] ¿Los archivos de `/public/` mantienen la estructura de HTML/CSS/JS vanilla existente?

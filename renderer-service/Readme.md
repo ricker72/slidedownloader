@@ -14,7 +14,11 @@ railway up
 
 Variables de entorno en Railway:
 - `PORT`: 3001
-- `CORS_ORIGIN`: https://tu-dominio.vercel.app (o *)
+- `RENDERER_SECRET`: obligatorio. Cadena larga y aleatoria; debe coincidir con la del proyecto principal.
+- `CORS_ORIGIN`: opcional. Origen del frontend si se llama directo desde el navegador; por defecto no se habilita CORS (el servidor principal llama de servidor a servidor).
+- `MAX_CONCURRENT_RENDERS`: opcional, por defecto 2.
+- `MAX_QUEUED_RENDERS`: opcional, por defecto 10.
+- `RENDER_TIMEOUT_MS`: opcional, por defecto 120000.
 
 ### Render
 ```bash
@@ -32,16 +36,19 @@ fly deploy
 ## Cómo se usa con SlideDownloader
 
 1. Desplegar este servicio y anotar su URL (ej: `https://slide-renderer.railway.app`).
-2. En el proyecto principal (`slides_downloader/`), crear un archivo `.env`:
+2. En el proyecto principal, definir las mismas variables:
    ```
    RENDERER_URL=https://slide-renderer.railway.app
+   RENDERER_SECRET=la-misma-cadena-larga
    ```
-3. El endpoint `/api/inspect` de SlideDownloader usará automáticamente el renderizador cuando el fetch directo falle.
+3. El endpoint `/api/inspect` de SlideDownloader usará el renderizador para extraer todas las diapositivas; si no está disponible, cae al método `lite` (fetch directo).
+
+Sin `RENDERER_SECRET` el servicio responde `503` en `/render`; con un secreto distinto responde `401`.
 
 ## Endpoints
 
-- `POST /render` — Recibe `{ url: "https://..." }` y devuelve título, descripción, imágenes y diapositivas.
-- `GET /api/health` — Health check.
+- `POST /render` — Requiere `Authorization: Bearer <RENDERER_SECRET>`. Recibe `{ url: "https://www.slideshare.net/..." }` y devuelve título, descripción, imágenes y diapositivas. Solo acepta URLs de `slideshare.net`.
+- `GET /api/health` — Health check (incluye renders activos y en cola).
 
 ## Requisitos
 

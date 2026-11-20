@@ -3,28 +3,34 @@
  * Diseñado para proteger los endpoints públicos de SlideDownloader contra
  * abuso y agotamiento de recursos (DoS, proxy de ancho de banda, caché lleno).
  *
- * Almacena contadores en un Map claveado por IP. Cada ventana de tiempo
- * reinicia los contadores. No requiere dependencias externas.
+ * Cada limitador mantiene su propio almacén. Antes todos compartían un único
+ * Map indexado solo por IP, así que agotar /api/health bloqueaba también
+ * /api/download y el resto de endpoints.
+ *
+ * No requiere dependencias externas. En Vercel cada instancia tiene su propia
+ * memoria: el límite es por instancia, no global.
  */
 
-// Almacenamiento en memoria: { claveIP: { contador, inicioVentana } }
-const rateStore = new Map();
+// Un almacén por limitador. El registro permite limpiar entradas expiradas.
+const stores = new Set();
 
 /**
- * Limpia entradas expiradas del almacene para evitar crecimiento ilimitado.
- * Se ejecuta cada 5 minutos.
+ * Limpia entradas expiradas de todos los almacenes para evitar crecimiento
+ * ilimitado. Se ejecuta cada 5 minutos.
  */
 setInterval(() => {
   const now = Date.now();
-  for (const [key, value] of rateStore.entries()) {
-    if (now - value.inicioVentana > value.windowMs) {
-      rateStore.delete(key);
+  for (const store of stores) {
+    for (const [key, value] of store.entries()) {
+      if (now - value.inicioVentana >= value.windowMs) {
+        store.delete(key);
+      }
     }
   }
 }, 5 * 60 * 1000).unref();
 
 /**
- * Crea un middleware de rate limiting.
+ * Crea un middleware de rate limiting con su propio contador.
  *
  * @param {object} options
  * @param {number} options.windowMs - Duración de la ventana en ms.
@@ -34,16 +40,19 @@ setInterval(() => {
  * @returns {Function} Middleware Express.
  */
 function rateLimiter({ windowMs = 60 * 1000, max = 60, message = 'Demasiadas peticiones. Intenta de nuevo más tarde.', statusCode = 429 } = {}) {
+  const store = new Map();
+  stores.add(store);
+
   return (req, res, next) => {
     // Usar req.ip (Express ya resuelve trust proxy si está configurado).
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const ip = req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
     const now = Date.now();
 
-    let entry = rateStore.get(ip);
+    let entry = store.get(ip);
 
-    if (!entry || now - entry.inicioVentana > windowMs) {
-      entry = { contador: 0, inicioVentana: now };
-      rateStore.set(ip, entry);
+    if (!entry || now - entry.inicioVentana >= windowMs) {
+      entry = { contador: 0, inicioVentana: now, windowMs };
+      store.set(ip, entry);
     }
 
     entry.contador += 1;
@@ -63,6 +72,15 @@ function rateLimiter({ windowMs = 60 * 1000, max = 60, message = 'Demasiadas pet
 
     next();
   };
+}
+
+/**
+ * Vacía todos los contadores. Pensado para pruebas que comparten proceso.
+ */
+function resetRateLimitStores() {
+  for (const store of stores) {
+    store.clear();
+  }
 }
 
 // Instancias preconfiguradas por endpoint.
@@ -88,6 +106,7 @@ const scribdDownloadLimiter = rateLimiter({
 
 module.exports = {
   rateLimiter,
+  resetRateLimitStores,
   apiLimiter,
   inspectLimiter,
   downloadLimiter,

@@ -3,7 +3,8 @@
  *
  * Flujo:
  * 1. `GET /api/scribd/inspect?url=` devuelve los metadatos del documento.
- * 2. `POST /api/scribd/download` genera el archivo y devuelve su URL.
+ * 2. `POST /api/scribd/download` genera el archivo y lo envía en la misma
+ *    respuesta; el navegador lo guarda como blob.
  *
  * Toda la información se pinta con `textContent`; nunca se inyecta HTML
  * procedente del servidor o de Scribd.
@@ -339,35 +340,43 @@ async function downloadDocument() {
       body: JSON.stringify({ url: currentDocument.inputValue, format })
     });
 
-    const data = await readJson(response);
-
-    if (!response.ok || !data.success) {
-      const message = data.error || 'No se pudo generar el archivo.';
+    if (!response.ok) {
+      const message = await DownloadUtils.readErrorMessage(
+        response,
+        'No se pudo generar el archivo'
+      );
       setStatus('error', message);
       showErrorDetail(message);
       return;
     }
 
-    setStatus('success', 'Descarga lista');
-    showDetail([
-      ['Título', data.title],
-      ['Formato', FORMAT_NAMES[data.format] || data.format],
-      ['Páginas incluidas', `${data.pageCount} de ${data.totalPages}`]
-    ]);
-    showWarnings(data.warnings);
-
-    if (!data.downloadUrl) {
-      showErrorDetail('El servidor no devolvió un enlace de descarga.');
+    if (DownloadUtils.isJsonResponse(response)) {
+      const data = await readJson(response);
+      const message = data.error || 'El servidor no devolvió el archivo generado.';
+      setStatus('error', message);
+      showErrorDetail(message);
       return;
     }
 
-    const link = document.createElement('a');
-    link.className = 'btn btn-primary scribd-result-link';
-    link.href = data.downloadUrl;
-    link.textContent = 'Descargar archivo';
-    link.setAttribute('download', '');
-    statusDetail.append(link);
-    link.click();
+    const metadata = DownloadUtils.readMetadata(response);
+    const { fileName } = await DownloadUtils.saveResponseAsFile(
+      response,
+      `scribd-${currentDocument.documentId}.${format}`
+    );
+
+    setStatus('success', 'Descarga lista');
+    showDetail([
+      ['Título', metadata.title || currentDocument.title],
+      ['Formato', FORMAT_NAMES[metadata.format || format] || metadata.format || format],
+      [
+        'Páginas incluidas',
+        metadata.slideCount != null && metadata.totalPages != null
+          ? `${metadata.slideCount} de ${metadata.totalPages}`
+          : ''
+      ],
+      ['Archivo', fileName]
+    ]);
+    showWarnings(metadata.warnings);
   } catch (error) {
     const message = 'No se pudo contactar con el servidor.';
     setStatus('error', message);

@@ -1,12 +1,8 @@
-function validarJobId(jobId) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(jobId);
-}
 const express = require('express');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { Readable } = require('stream');
 const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality } = require('../services/slideshareService');
 const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
 const { getGoogleCseId } = require('../services/presentationSearch');
@@ -20,6 +16,9 @@ const {
   pingLimiter
 } = require('../middleware/rateLimiter');
 const { securityHeaders } = require('../middleware/securityHeaders');
+const { sendGeneratedFile, MIME_BY_EXTENSION } = require('../utils/fileResponse');
+const { isValidJobId, cleanupJobDir } = require('../utils/downloadJob');
+const { openPublicResponse, isBlockedHostname } = require('../utils/publicNetwork');
 const scribdRouter = require('../api/scribd');
 
 const app = express();
@@ -55,13 +54,11 @@ console.log('[SlideDownloader] publicDir =', publicDir, '| exists =', fs.existsS
 console.log('[SlideDownloader] downloadsDir =', downloadsDir);
 console.log('[SlideDownloader] isVercel =', isVercel);
 
-const DOWNLOAD_MIME_TYPES = {
-  '.pdf': 'application/pdf',
-  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  '.ppsx': 'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
-  '.potx': 'application/vnd.openxmlformats-officedocument.presentationml.template',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-};
+if (process.env.RENDERER_URL && !process.env.RENDERER_SECRET) {
+  console.warn(
+    '[SlideDownloader] RENDERER_URL está configurada sin RENDERER_SECRET: el renderizador rechazará las peticiones hasta definir el mismo secreto en ambos servicios.'
+  );
+}
 
 // Archivos que el buscador puede descargar a través del proxy.
 const DIRECT_FILE_MIME_TYPES = {
@@ -78,20 +75,6 @@ const DOWNLOAD_PROXY_HEADERS = {
   'accept-language': 'es-MX,es;q=0.9'
 };
 
-function isPrivateHostname(hostname) {
-  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-
-  if (!host) return true;
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true;
-
-  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
-    const [a, b] = host.split('.').map(Number);
-    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-  }
-
-  return host === '::1' || /^f[cd][0-9a-f]{2}:/i.test(host) || /^fe80:/i.test(host);
-}
-
 function parseDirectFileUrl(raw) {
   let parsed;
 
@@ -102,7 +85,10 @@ function parseDirectFileUrl(raw) {
   }
 
   if (!['http:', 'https:'].includes(parsed.protocol)) return null;
-  if (isPrivateHostname(parsed.hostname)) return null;
+  if (parsed.username || parsed.password) return null;
+  // Bloquea literales privados y nombres locales; los dominios se validan
+  // otra vez al resolver DNS, justo antes de conectar.
+  if (isBlockedHostname(parsed.hostname)) return null;
 
   const extension = path.extname(parsed.pathname).toLowerCase();
   if (!DIRECT_FILE_MIME_TYPES[extension]) return null;
@@ -316,81 +302,107 @@ app.get('/api/file', fileLimiter, async (req, res) => {
     });
   }
 
-  const fileName = buildProxyFileName(target.url, target.extension);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DOWNLOAD_PROXY_TIMEOUT);
+  let opened;
 
   try {
-    const upstream = await fetch(target.url, {
+    // Redirecciones manuales: cada salto se valida (protocolo, host, IP).
+    opened = await openPublicResponse(target.url, {
       headers: DOWNLOAD_PROXY_HEADERS,
-      redirect: 'follow',
-      signal: controller.signal
+      timeoutMs: DOWNLOAD_PROXY_TIMEOUT,
+      method: req.method === 'HEAD' ? 'HEAD' : 'GET'
     });
-
-    if (!upstream.ok) {
-      clearTimeout(timer);
-      return sendDownloadError(res, `El servidor del archivo respondió ${upstream.status}`, target.url);
-    }
-
-    const contentType = String(upstream.headers.get('content-type') || '').toLowerCase();
-    if (contentType.includes('text/html')) {
-      clearTimeout(timer);
-      return sendDownloadError(res, 'El enlace abrió una página en lugar del archivo', target.url);
-    }
-
-    const contentLength = Number(upstream.headers.get('content-length') || 0);
-    if (contentLength > DOWNLOAD_PROXY_MAX_BYTES) {
-      clearTimeout(timer);
-      return res.redirect(302, target.url);
-    }
-
-    res.status(200);
-    res.setHeader('Content-Type', target.mime);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(fileName).replace(/'/g, '%27')}`);
-    res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-
-    if (contentLength) {
-      res.setHeader('Content-Length', String(contentLength));
-    }
-
-    if (req.method === 'HEAD' || !upstream.body) {
-      clearTimeout(timer);
-      return res.end();
-    }
-
-    const stream = Readable.fromWeb(upstream.body);
-
-    stream.on('error', (error) => {
-      console.warn('Error al transmitir descarga:', error.message);
-      if (!res.headersSent) {
-        sendDownloadError(res, 'La descarga se interrumpió', target.url);
-      } else {
-        res.destroy(error);
-      }
-    });
-
-    res.on('close', () => {
-      clearTimeout(timer);
-      controller.abort();
-      stream.destroy();
-    });
-
-    stream.pipe(res);
-    return undefined;
   } catch (error) {
-    clearTimeout(timer);
+    if (res.headersSent) return res.destroy(error);
+
+    if (error.code === 'EBLOCKED') {
+      return res.status(400).json({
+        success: false,
+        error: 'Solo se pueden descargar archivos públicos alojados en Internet'
+      });
+    }
+
+    if (error.code === 'ETIMEDOUT') {
+      return sendDownloadError(res, 'El servidor del archivo tardó demasiado en responder', target.url);
+    }
+
+    if (error.status) {
+      return sendDownloadError(res, `El servidor del archivo respondió ${error.status}`, target.url);
+    }
+
+    return sendDownloadError(res, 'No se pudo conectar con el servidor del archivo', target.url);
+  }
+
+  const { response, request } = opened;
+
+  const contentType = String(response.headers['content-type'] || '').toLowerCase();
+  if (contentType.includes('text/html')) {
+    response.resume();
+    request.destroy();
+    return sendDownloadError(res, 'El enlace abrió una página en lugar del archivo', target.url);
+  }
+
+  const contentLength = Number(response.headers['content-length'] || 0);
+  if (contentLength > DOWNLOAD_PROXY_MAX_BYTES) {
+    response.resume();
+    request.destroy();
+    return res.redirect(302, target.url);
+  }
+
+  const fileName = buildProxyFileName(target.url, target.extension);
+
+  res.status(200);
+  res.setHeader('Content-Type', target.mime);
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(fileName).replace(/'/g, '%27')}`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  if (contentLength) {
+    res.setHeader('Content-Length', String(contentLength));
+  }
+
+  if (req.method === 'HEAD') {
+    response.resume();
+    request.destroy();
+    return res.end();
+  }
+
+  let closed = false;
+  let timer = null;
+
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    if (timer) clearTimeout(timer);
+    request.destroy();
+    response.destroy();
+  };
+
+  // La descarga completa (no solo las cabeceras) tiene su propio límite.
+  timer = setTimeout(() => {
+    const timeoutError = Object.assign(new Error('Tiempo de espera agotado'), { code: 'ETIMEDOUT' });
+    response.destroy(timeoutError);
+  }, DOWNLOAD_PROXY_TIMEOUT);
+
+  response.on('error', (error) => {
+    if (timer) clearTimeout(timer);
+    console.warn('Error al transmitir descarga:', error.message);
 
     if (res.headersSent) {
-      return res.destroy(error);
+      res.destroy(error);
+    } else {
+      sendDownloadError(res, 'La descarga se interrumpió', target.url);
     }
 
-    const message = error.name === 'AbortError'
-      ? 'El servidor del archivo tardó demasiado en responder'
-      : 'No se pudo conectar con el servidor del archivo';
+    cleanup();
+  });
 
-    return sendDownloadError(res, message, target.url);
-  }
+  res.on('close', cleanup);
+  res.on('finish', () => {
+    if (timer) clearTimeout(timer);
+  });
+
+  response.pipe(res);
+  return undefined;
 });
 
 
@@ -600,16 +612,19 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
       imageUrls: Array.isArray(imageUrls) && imageUrls.length ? imageUrls : cachedInspection?.previewImages,
       title: title || cachedInspection?.title
     });
-    return res.json({
-      success: true,
+
+    // El archivo se envía en esta misma respuesta. Devolver una URL
+    // `/download/{jobId}/...` fallaba en Vercel cuando la siguiente petición
+    // caía en otra instancia y no encontraba el archivo de `/tmp`.
+    return sendGeneratedFile(res, {
+      filePath: result.filePath,
+      fileName: result.fileName,
       title: result.title,
       format: result.format,
       quality: result.quality,
-      source: result.source,
       slideCount: result.imageCount,
-      downloadUrl: result.downloadUrl,
-      fileName: result.fileName,
-      message: 'Archivo generado correctamente'
+      source: result.source,
+      onCleanup: () => cleanupJobDir(result.filePath)
     });
   } catch (error) {
     const status = error.status || 500;
@@ -631,12 +646,15 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
   }
 });
 
+// Ruta heredada: las descargas nuevas envían el archivo en la respuesta de
+// /api/download y borran el trabajo, así que solo sirve para enlaces antiguos
+// o para depurar en local.
 app.get('/download/:jobId/:filename', (req, res) => {
   const { jobId, filename } = req.params;
 
   // Validar que jobId sea un UUID v4 para prevenir path traversal o inyección.
   // Esta validación debe venir PRIMERO, antes que cualquier path.resolve o fs.existsSync.
-  if (!validarJobId(jobId)) {
+  if (!isValidJobId(jobId)) {
     return res.status(400).json({ success: false, error: 'ID de trabajo inválido' });
   }
 
@@ -654,7 +672,7 @@ app.get('/download/:jobId/:filename', (req, res) => {
   }
 
   const extension = path.extname(safeName).toLowerCase();
-  res.setHeader('Content-Type', DOWNLOAD_MIME_TYPES[extension] || 'application/octet-stream');
+  res.setHeader('Content-Type', MIME_BY_EXTENSION[extension] || 'application/octet-stream');
 
   return res.download(filePath, safeName);
 });

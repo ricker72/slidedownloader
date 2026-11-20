@@ -6,9 +6,10 @@
  * - Playwright/Chromium no funciona en funciones serverless estándar
  *   (falta de bibliotecas del sistema y límite de tamaño).
  *   El endpoint /api/inspect intenta primero un método "lite" (sin browser).
- * - El sistema de archivos es de solo lectura excepto /tmp.
- *   Los archivos generados se guardan en /tmp y se pierden al terminar la invocación.
- *   Idealmente devolver el archivo en la misma respuesta o usar Vercel Blob / S3.
+ * - El sistema de archivos es de solo lectura excepto /tmp. Por eso
+ *   /api/download y /api/scribd/download generan el archivo en /tmp y lo
+ *   envían en la misma respuesta HTTP; no se devuelve una URL que una
+ *   petición posterior podría no encontrar en otra instancia.
  *
  * Los routers adicionales (/api/scribd, etc.) se montan dentro de
  * server/app.js para que funcionen igual en local y en Vercel.

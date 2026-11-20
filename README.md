@@ -104,7 +104,7 @@ La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF
 | Método | Ruta | Descripción |
 |:---|:---|:---|
 | `GET` | `/api/scribd/inspect?url=` | Metadatos del documento: título, páginas, formatos y permiso de descarga |
-| `POST` | `/api/scribd/download` | Genera el archivo. Cuerpo: `{ "url": "...", "format": "pdf" }` |
+| `POST` | `/api/scribd/download` | Genera el archivo y lo devuelve en la misma respuesta (descarga directa). Cuerpo: `{ "url": "...", "format": "pdf" }` |
 
 ## 🔎 Configuración del filtro de Google
 
@@ -122,6 +122,15 @@ npm start
 En Vercel, configura `GOOGLE_CSE_ID` en **Project Settings → Environment Variables**. El ID se expone al navegador para cargar el componente oficial de Google; no es una clave secreta. En [Programmable Search Engine](https://programmablesearchengine.google.com/controlpanel/all), agrega los dominios que quieres incluir en **Sites to search**. La aplicación no puede mostrar resultados de sitios que el motor no tenga habilitados; el enlace «Abrir búsqueda en Google» permite continuar la consulta en Google Search.
 
 La aplicación personaliza sus resultados mediante el callback oficial de resultados de Google y conserva las tarjetas con vista previa y descarga. No automatiza ni raspa la página de resultados de Google. Si un tema no devuelve archivos, comprueba los dominios configurados en el motor y que esos sitios incluyan archivos compatibles.
+
+## 🖥️ Renderizador externo (opcional)
+
+Para las presentaciones que SlideShare bloquea al hacer `fetch` directo, se puede desplegar la carpeta `renderer-service/` (Puppeteer) en Railway, Render o fly.io. En el proyecto principal configura:
+
+- `RENDERER_URL`: URL del servicio desplegado.
+- `RENDERER_SECRET`: secreto compartido. El renderizador exige `Authorization: Bearer <secreto>` en cada petición; sin él responde `503` y con uno distinto `401`.
+
+El renderizador solo acepta URLs públicas de `slideshare.net`, limita los renders concurrentes y bloquea peticiones del navegador hacia IPs privadas o locales. Si no se configura, la aplicación sigue funcionando con el método `lite` (fetch directo).
 
 ## 💻 Lenguaje de Programación
 

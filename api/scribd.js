@@ -2,7 +2,9 @@
  * Endpoints de Scribd.
  *
  * - GET  /api/scribd/inspect?url=...   → metadatos del documento (sin generar archivo)
- * - POST /api/scribd/download           → genera el archivo y devuelve su URL
+ * - POST /api/scribd/download           → genera el archivo y lo envía en la
+ *   misma respuesta (no una URL posterior, que en Vercel podía caer en otra
+ *   instancia)
  *
  * Solo se usan las vistas públicas que Scribd entrega a cualquier visitante:
  * sin cookies, sin cuenta y sin credenciales.
@@ -12,6 +14,8 @@ const express = require('express');
 const router = express.Router();
 
 const scribdService = require('../services/scribdService');
+const { sendGeneratedFile } = require('../utils/fileResponse');
+const { cleanupJobDir } = require('../utils/downloadJob');
 const {
   scribdInspectLimiter,
   scribdDownloadLimiter
@@ -67,7 +71,18 @@ router.post('/download', scribdDownloadLimiter, async (req, res) => {
 
   try {
     const result = await scribdService.download({ url, format });
-    return res.json({ success: true, ...result });
+
+    return sendGeneratedFile(res, {
+      filePath: result.filePath,
+      fileName: result.fileName,
+      title: result.title,
+      format: result.format,
+      slideCount: result.pageCount,
+      totalPages: result.totalPages,
+      source: result.sourceUrl,
+      warnings: result.warnings,
+      onCleanup: () => cleanupJobDir(result.filePath)
+    });
   } catch (error) {
     return sendError(res, error);
   }

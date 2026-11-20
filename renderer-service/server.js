@@ -4,20 +4,43 @@
  * y extraer título, descripción, autor y URLs de las imágenes de cada diapositiva.
  * Incluye scroll automático para cargar todas las imágenes (lazy-loading).
  *
+ * Seguridad:
+ * - Solo acepta URLs públicas de slideshare.net.
+ * - Exige `RENDERER_SECRET` (cabecera `Authorization: Bearer ...`).
+ * - Limita cuántos renders se ejecutan a la vez y cuánto pueden tardar.
+ * - Bloquea peticiones del navegador hacia IPs privadas o locales.
+ *
  * NO desplegar en Vercel serverless.
  * Desplegar en: Railway, Render, fly.io, o cualquier VPS con Node.js.
  */
 
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const puppeteer = require('puppeteer');
+const { normalizeSlideshareUrl, isBlockedHost } = require('./guards');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
-app.use(cors({ origin: CORS_ORIGIN }));
-app.use(express.json({ limit: '10mb' }));
+const CORS_ORIGIN = String(process.env.CORS_ORIGIN || '').trim();
+const RENDERER_SECRET = String(process.env.RENDERER_SECRET || '').trim();
+const MAX_CONCURRENT_RENDERS = Math.max(1, Number(process.env.MAX_CONCURRENT_RENDERS) || 2);
+const MAX_QUEUED_RENDERS = Math.max(0, Number(process.env.MAX_QUEUED_RENDERS) || 10);
+const QUEUE_TIMEOUT_MS = Math.max(1000, Number(process.env.QUEUE_TIMEOUT_MS) || 30000);
+const RENDER_TIMEOUT_MS = Math.max(10000, Number(process.env.RENDER_TIMEOUT_MS) || 120000);
+
+app.disable('x-powered-by');
+app.use(express.json({ limit: '256kb' }));
+
+if (CORS_ORIGIN) {
+  const allowedOrigins = CORS_ORIGIN.split(',').map((value) => value.trim()).filter(Boolean);
+  app.use(cors({ origin: allowedOrigins.includes('*') ? '*' : allowedOrigins }));
+}
+
+if (!RENDERER_SECRET) {
+  console.error('[renderer] RENDERER_SECRET no está configurado: /render responderá 503.');
+}
 
 let browser = null;
 
@@ -32,7 +55,6 @@ async function getBrowser() {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--single-process',
         '--disable-gpu'
       ]
     });
@@ -40,37 +62,124 @@ async function getBrowser() {
   return browser;
 }
 
+/* ------------------------------------------------------------------ *
+ * Control de concurrencia
+ * ------------------------------------------------------------------ */
+
+let activeRenders = 0;
+const waitingRenders = [];
+
+function acquireSlot() {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) {
+    activeRenders += 1;
+    return Promise.resolve();
+  }
+
+  if (waitingRenders.length >= MAX_QUEUED_RENDERS) {
+    return Promise.reject(Object.assign(new Error('Renderizador ocupado'), { status: 429 }));
+  }
+
+  return new Promise((resolve, reject) => {
+    const entry = { resolve, reject, timer: null };
+
+    entry.timer = setTimeout(() => {
+      const index = waitingRenders.indexOf(entry);
+      if (index !== -1) waitingRenders.splice(index, 1);
+      reject(Object.assign(new Error('Tiempo de espera en cola agotado'), { status: 504 }));
+    }, QUEUE_TIMEOUT_MS);
+
+    waitingRenders.push(entry);
+  });
+}
+
+function releaseSlot() {
+  const next = waitingRenders.shift();
+
+  if (next) {
+    clearTimeout(next.timer);
+    next.resolve();
+    return;
+  }
+
+  activeRenders = Math.max(0, activeRenders - 1);
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timer;
+
+  const timeout = new Promise((resolve, reject) => {
+    timer = setTimeout(
+      () => reject(Object.assign(new Error('Tiempo de espera agotado'), { status: 504 })),
+      timeoutMs
+    );
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/* ------------------------------------------------------------------ *
+ * Autenticación
+ * ------------------------------------------------------------------ */
+
+function safeEqual(left, right) {
+  const a = Buffer.from(String(left));
+  const b = Buffer.from(String(right));
+
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireSecret(req, res, next) {
+  if (!RENDERER_SECRET) {
+    return res.status(503).json({
+      success: false,
+      error: 'El renderizador no tiene RENDERER_SECRET configurado.'
+    });
+  }
+
+  const authorization = req.get('authorization') || '';
+  const bearer = authorization.toLowerCase().startsWith('bearer ')
+    ? authorization.slice(7).trim()
+    : '';
+  const alternative = req.get('x-renderer-secret') || '';
+
+  if (!safeEqual(bearer, RENDERER_SECRET) && !safeEqual(alternative, RENDERER_SECRET)) {
+    return res.status(401).json({ success: false, error: 'No autorizado' });
+  }
+
+  return next();
+}
+
+/* ------------------------------------------------------------------ *
+ * Extracción de la presentación
+ * ------------------------------------------------------------------ */
+
 /**
- * Hacer scroll por la página para cargar todas las imágenes (lazy-loading)
+ * Hacer scroll por la página para cargar todas las imágenes (lazy-loading).
  * SlideShare carga las imágenes solo cuando se hace scroll hacia ellas.
  */
 async function scrollAndLoadImages(page) {
   console.log('Iniciando scroll para cargar imágenes...');
 
-  const maxScrolls = 60; // Máximo de scrolls para evitar bucle infinito
-  const scrollDelay = 1500; // Espera entre scrolls (ms)
-  const scrollStep = 800; // Píxeles por scroll
+  const maxScrolls = 60;
+  const scrollDelay = 1500;
+  const scrollStep = 800;
 
   let previousHeight = 0;
   let currentHeight = await page.evaluate('document.body.scrollHeight');
 
   for (let i = 0; i < maxScrolls; i++) {
-    // Hacer scroll hacia abajo
-    await page.evaluate((scrollStep) => {
-      window.scrollBy(0, scrollStep);
+    await page.evaluate((step) => {
+      window.scrollBy(0, step);
     }, scrollStep);
 
-    // Esperar a que carguen las imágenes
-    await new Promise(resolve => setTimeout(resolve, scrollDelay));
+    await new Promise((resolve) => setTimeout(resolve, scrollDelay));
 
-    // Verificar si la página creció (cargó más contenido)
     const newHeight = await page.evaluate('document.body.scrollHeight');
     if (newHeight === previousHeight && newHeight === currentHeight) {
-      // Si no creció, intentar un scroll final al fondo
       await page.evaluate(() => {
         window.scrollTo(0, document.body.scrollHeight);
       });
-      await new Promise(resolve => setTimeout(resolve, scrollDelay));
+      await new Promise((resolve) => setTimeout(resolve, scrollDelay));
       const finalHeight = await page.evaluate('document.body.scrollHeight');
       if (finalHeight === currentHeight) {
         console.log(`No hay más contenido después de ${i + 1} scrolls`);
@@ -83,20 +192,16 @@ async function scrollAndLoadImages(page) {
     console.log(`Scroll ${i + 1}: altura ${currentHeight}px`);
   }
 
-  // Scroll final al inicio para asegurar que todo cargó
   await page.evaluate(() => {
     window.scrollTo(0, 0);
   });
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 1000));
 
   console.log('Scroll completado');
 }
 
-/**
- * Extraer información y imágenes de la página cargada
- */
 async function extractPageData(page) {
-  return await page.evaluate(() => {
+  return page.evaluate(() => {
     const addValue = (set, raw) => {
       if (typeof raw !== 'string') return;
       const value = raw.trim();
@@ -107,13 +212,11 @@ async function extractPageData(page) {
 
     const imageSet = new Set();
 
-    // Imágenes de <img> y <source>
     for (const img of document.querySelectorAll('img, source')) {
       addValue(imageSet, img.currentSrc || img.src || img.dataset.src || img.dataset.original || img.getAttribute('data-full'));
       addValue(imageSet, img.getAttribute('srcset')?.split(',')[0]?.trim().split(/\s+/)[0]);
     }
 
-    // URLs de imágenes en scripts
     const scriptText = Array.from(document.querySelectorAll('script'))
       .map((node) => node.textContent || '')
       .join(' ');
@@ -140,19 +243,11 @@ async function extractPageData(page) {
   });
 }
 
-app.post('/render', async (req, res) => {
-  const { url } = req.body || {};
-
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ success: false, error: 'URL requerida' });
-  }
-
-  let page = null;
+async function renderPresentation(url) {
+  const browserInstance = await getBrowser();
+  const page = await browserInstance.newPage();
 
   try {
-    const browserInstance = await getBrowser();
-    page = await browserInstance.newPage();
-
     await page.setViewport({ width: 1440, height: 900 });
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -162,33 +257,54 @@ app.post('/render', async (req, res) => {
       'Upgrade-Insecure-Requests': '1'
     });
 
+    // Bloquear peticiones del navegador hacia la red interna o esquemas locales.
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      try {
+        const parsed = new URL(request.url());
+
+        if (parsed.protocol === 'file:' || parsed.protocol === 'ftp:') {
+          return request.abort();
+        }
+
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return request.continue();
+        }
+
+        if (isBlockedHost(parsed.hostname)) {
+          return request.abort();
+        }
+
+        return request.continue();
+      } catch (error) {
+        try {
+          return request.abort();
+        } catch (abortError) {
+          return undefined;
+        }
+      }
+    });
+
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: 60000
     });
 
-    // Espera inicial para que cargue el contenido base
-    await new Promise((r) => setTimeout(r, 3000));
-
-    // Hacer scroll para cargar todas las imágenes (lazy-loading)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     await scrollAndLoadImages(page);
 
-    // Extraer datos
     const result = await extractPageData(page);
 
-    // Deduplicar y filtrar
     const deduped = [...new Set(result.imageUrls.filter(Boolean))];
-    const imageUrls = deduped.filter((u) => /(jpg|jpeg|png|gif|webp|bmp)/i.test(u)).slice(0, 200);
+    const imageUrls = deduped.filter((value) => /(jpg|jpeg|png|gif|webp|bmp)/i.test(value)).slice(0, 200);
 
-    // Detectar challenge de SlideShare
     const challengeDetected =
       /verify you are human|check your browser|captcha|bot detected|access denied|security check|challenge/i.test(
         (await page.evaluate(() => document.body.innerText)) || ''
       ) ||
       (await page.evaluate(() => !!document.querySelector('iframe[src*="captcha"], #challenge-stage, .recaptcha')));
 
-    return res.json({
-      success: true,
+    return {
       url,
       title: result.title || 'Presentación',
       description: result.description || '',
@@ -197,28 +313,75 @@ app.post('/render', async (req, res) => {
       imageUrls,
       previewImages: imageUrls,
       galleryImages: imageUrls,
-      challengeDetected: challengeDetected || false,
-      method: 'puppeteer'
-    });
-  } catch (error) {
-    console.error('Error en /render:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Error al renderizar la presentación'
-    });
+      challengeDetected: challengeDetected || false
+    };
   } finally {
-    if (page) {
-      try {
-        await page.close();
-      } catch (e) {
-        // ignore
+    await page.close().catch(() => {});
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Endpoints
+ * ------------------------------------------------------------------ */
+
+app.post('/render', requireSecret, async (req, res) => {
+  const url = normalizeSlideshareUrl(req.body && req.body.url);
+
+  if (!url) {
+    return res.status(400).json({
+      success: false,
+      error: 'Solo se aceptan URLs públicas de slideshare.net'
+    });
+  }
+
+  let acquired = false;
+  let work = null;
+
+  try {
+    await acquireSlot();
+    acquired = true;
+
+    work = renderPresentation(url);
+    const result = await withTimeout(work, RENDER_TIMEOUT_MS);
+
+    return res.json({ success: true, ...result, method: 'puppeteer' });
+  } catch (error) {
+    const status = Number(error.status) || 500;
+
+    if (status >= 500) {
+      console.error('Error en /render:', error.message);
+    }
+
+    const message =
+      status === 429
+        ? 'El renderizador está ocupado. Intenta de nuevo en unos segundos.'
+        : status === 504
+          ? 'El renderizado tardó demasiado.'
+          : status >= 500
+            ? 'No se pudo renderizar la presentación.'
+            : error.message;
+
+    return res.status(status).json({ success: false, error: message });
+  } finally {
+    // El cupo se libera cuando la página termina de cerrarse, no cuando
+    // responde el timeout, para no superar el máximo de navegadores.
+    if (acquired) {
+      if (work) {
+        work.finally(() => releaseSlot()).catch(() => {});
+      } else {
+        releaseSlot();
       }
     }
   }
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'slidedownloader-renderer' });
+  res.json({
+    status: 'ok',
+    service: 'slidedownloader-renderer',
+    active: activeRenders,
+    queued: waitingRenders.length
+  });
 });
 
 app.listen(PORT, () => {

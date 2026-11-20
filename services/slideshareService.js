@@ -662,9 +662,16 @@ async function extractPresentationInfoViaRenderer(url) {
   const timeout = setTimeout(() => controller.abort(), 60000);
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const rendererSecret = String(process.env.RENDERER_SECRET || '').trim();
+
+    if (rendererSecret) {
+      headers.Authorization = `Bearer ${rendererSecret}`;
+    }
+
     const response = await fetch(`${rendererUrl.replace(/\/$/, '')}/render`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ url }),
       signal: controller.signal
     });
@@ -1025,6 +1032,8 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
       imageCount: imageUrls.length,
       fileName: result.filename,
       filePath: result.outputFile,
+      // Se conserva por compatibilidad; la API envía el archivo en la misma
+      // respuesta y borra el directorio del trabajo.
       downloadUrl: `/download/${jobId}/${result.filename}`
     };
   } catch (error) {
