@@ -120,8 +120,24 @@ function isLikelyImageUrl(value) {
   return /\.(jpg|jpeg|png|webp|gif|bmp)(\?.*)?$/i.test(value) || value.includes('slidesharecdn');
 }
 
-// Tope de diapositivas por presentación. Evita respuestas gigantes y abusos.
-const MAX_SLIDES = 200;
+function readPositiveInt(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+// Tope de diapositivas por presentación. En serverless se baja porque cada
+// diapositiva HD ocupa memoria y tiempo dentro de una función de 60 s.
+const MAX_SLIDES = readPositiveInt('MAX_SLIDES', isVercel ? 80 : 200);
+
+// Límites de las imágenes que se descargan para el archivo final.
+const MAX_IMAGE_BYTES = readPositiveInt('MAX_IMAGE_BYTES', 15 * 1024 * 1024);
+const MAX_TOTAL_IMAGE_BYTES = readPositiveInt(
+  'MAX_TOTAL_IMAGE_BYTES',
+  isVercel ? 80 * 1024 * 1024 : 160 * 1024 * 1024
+);
+const IMAGE_CONCURRENCY = readPositiveInt('IMAGE_CONCURRENCY', isVercel ? 8 : 10);
+const IMAGE_TIMEOUT_MS = readPositiveInt('IMAGE_TIMEOUT_MS', isVercel ? 15000 : 30000);
+const MAX_DOWNLOAD_MS = readPositiveInt('MAX_DOWNLOAD_MS', isVercel ? 35000 : 5 * 60 * 1000);
 
 /**
  * Las páginas de SlideShare incluyen, además de las diapositivas, miniaturas
@@ -374,13 +390,13 @@ async function normalizeImageBuffer(buffer) {
  * Descargar una imagen en la calidad pedida, probando las variantes
  * disponibles antes de rendirse.
  */
-async function downloadImage(imageUrl, quality = 'sd') {
+async function downloadImage(imageUrl, quality = 'sd', maxBytes = MAX_IMAGE_BYTES) {
   const candidates = getImageCandidates(imageUrl, quality);
   let lastError = null;
 
   for (const candidate of candidates) {
     try {
-      const raw = await downloadBinary(candidate);
+      const raw = await downloadBinary(candidate, 0, maxBytes);
       const { buffer, mime } = await normalizeImageBuffer(raw);
 
       if (mime !== 'image/png' && mime !== 'image/jpeg') {
@@ -397,7 +413,7 @@ async function downloadImage(imageUrl, quality = 'sd') {
   throw lastError || new Error(`No se pudo descargar la imagen: ${imageUrl}`);
 }
 
-async function downloadBinary(url, redirectCount = 0) {
+async function downloadBinary(url, redirectCount = 0, maxBytes = MAX_IMAGE_BYTES, timeoutMs = IMAGE_TIMEOUT_MS) {
   if (!url) {
     throw new Error('URL requerida para descargar el recurso');
   }
@@ -412,6 +428,13 @@ async function downloadBinary(url, redirectCount = 0) {
 
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
+    let settled = false;
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
 
     const request = lib.get(url, {
       headers: {
@@ -424,23 +447,51 @@ async function downloadBinary(url, redirectCount = 0) {
 
       if (status >= 300 && status < 400 && response.headers.location) {
         request.destroy();
-        return resolve(downloadBinary(response.headers.location, redirectCount + 1));
+        return resolve(downloadBinary(response.headers.location, redirectCount + 1, maxBytes, timeoutMs));
       }
 
       if (status >= 400) {
-        return reject(new Error(`HTTP ${status} al descargar recurso`));
+        response.resume();
+        request.destroy();
+        return fail(new Error(`HTTP ${status} al descargar recurso`));
+      }
+
+      const declared = Number(response.headers['content-length']);
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        response.resume();
+        request.destroy();
+        return fail(createServiceError('La imagen es demasiado grande para convertirla.', 413, 'IMAGE_TOO_LARGE'));
       }
 
       const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
+      let total = 0;
+
+      response.on('data', (chunk) => {
+        if (settled) return;
+
+        total += chunk.length;
+
+        if (total > maxBytes) {
+          request.destroy();
+          return fail(createServiceError('La imagen es demasiado grande para convertirla.', 413, 'IMAGE_TOO_LARGE'));
+        }
+
+        chunks.push(chunk);
+      });
+
+      response.on('end', () => {
+        if (settled) return;
+        settled = true;
+        resolve(Buffer.concat(chunks));
+      });
+
+      response.on('error', fail);
     });
 
-    request.setTimeout(30000, () => {
+    request.setTimeout(timeoutMs, () => {
       request.destroy(new Error('Timeout al descargar recurso'));
     });
-    request.on('error', reject);
+    request.on('error', fail);
   });
 }
 
@@ -705,35 +756,126 @@ async function extractPresentationInfoViaRenderer(url) {
 }
 
 /**
+ * Dimensiones reales de una imagen (solo cabecera, no decodifica entera).
+ * Sirven para insertarla sin deformarla en PPTX/DOCX.
+ */
+async function getImageDimensions(buffer) {
+  if (!sharp || !Buffer.isBuffer(buffer)) return null;
+
+  try {
+    const metadata = await sharp(buffer).metadata();
+    if (!metadata.width || !metadata.height) return null;
+    return { width: metadata.width, height: metadata.height };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Ajusta una imagen dentro de una caja conservando su proporción (letterbox).
+ * Si no hay dimensiones, devuelve la caja completa.
+ */
+function fitImageWithinBox(imageWidth, imageHeight, box) {
+  const width = Number(imageWidth);
+  const height = Number(imageHeight);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { x: box.x, y: box.y, w: box.w, h: box.h };
+  }
+
+  const scale = Math.min(box.w / width, box.h / height);
+  const fittedWidth = width * scale;
+  const fittedHeight = height * scale;
+
+  return {
+    x: box.x + (box.w - fittedWidth) / 2,
+    y: box.y + (box.h - fittedHeight) / 2,
+    w: fittedWidth,
+    h: fittedHeight
+  };
+}
+
+/**
  * Descarga las imágenes en paralelo (con límite) conservando el orden original.
  * En Vercel, descargar decenas de diapositivas en serie puede agotar el tiempo
  * máximo de ejecución de la función.
  *
  * Cada elemento de la lista puede ser una URL o un objeto `{ buffer, mime }`
  * ya materializado (por ejemplo, una página reconstruida por otro servicio).
+ *
+ * Se corta si el total de bytes supera `maxTotalBytes` para no agotar la
+ * memoria de una función serverless.
  */
-async function downloadImagesConcurrently(imageItems, quality, concurrency = 10) {
+async function downloadImagesConcurrently(
+  imageItems,
+  quality,
+  concurrency = IMAGE_CONCURRENCY,
+  maxTotalBytes = MAX_TOTAL_IMAGE_BYTES
+) {
   const list = Array.isArray(imageItems) ? imageItems : [];
   const results = new Array(list.length).fill(null);
   let cursor = 0;
+  let totalBytes = 0;
+  let limitError = null;
+  const deadline = Date.now() + MAX_DOWNLOAD_MS;
 
   const workers = Array.from({ length: Math.min(concurrency, list.length) }, async () => {
     while (cursor < list.length) {
+      if (limitError) return;
+
+      if (Date.now() > deadline) {
+        limitError = createServiceError(
+          'La descarga de las diapositivas tardó demasiado. Intenta con menos diapositivas o calidad SD.',
+          504,
+          'DECK_TIMEOUT'
+        );
+        throw limitError;
+      }
+
       const index = cursor;
       cursor += 1;
 
       const item = list[index];
 
       try {
+        let buffer;
+        let mime;
+        let url;
+
         if (item && typeof item === 'object' && Buffer.isBuffer(item.buffer)) {
-          const mime = item.mime || detectImageMime(item.buffer);
-          results[index] = { url: item.url || `page-${index + 1}`, buffer: item.buffer, mime };
-          continue;
+          buffer = item.buffer;
+          mime = item.mime || detectImageMime(buffer);
+          url = item.url || `page-${index + 1}`;
+        } else {
+          buffer = await downloadImage(item, quality);
+          mime = detectImageMime(buffer);
+          url = item;
         }
 
-        const buffer = await downloadImage(item, quality);
-        results[index] = { url: item, buffer, mime: detectImageMime(buffer) };
+        totalBytes += buffer.length;
+
+        if (totalBytes > maxTotalBytes) {
+          limitError = createServiceError(
+            'La presentación es demasiado grande para convertirla. Reduce el número de diapositivas o usa calidad SD.',
+            413,
+            'DECK_TOO_LARGE'
+          );
+          throw limitError;
+        }
+
+        const dimensions = await getImageDimensions(buffer);
+        results[index] = {
+          url,
+          buffer,
+          mime,
+          width: dimensions ? dimensions.width : null,
+          height: dimensions ? dimensions.height : null
+        };
       } catch (error) {
+        if (error && (error.code === 'DECK_TOO_LARGE' || error.code === 'DECK_TIMEOUT')) {
+          throw error;
+        }
+
         console.warn(`No se pudo descargar la imagen ${item}:`, error.message);
       }
     }
@@ -786,6 +928,9 @@ async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd')
   });
 }
 
+const PPTX_IMAGE_BOX = { x: 0.5, y: 0.8, w: 12.33, h: 6.5 };
+const DOCX_IMAGE_BOX = { x: 0, y: 0, w: 500, h: 300 };
+
 async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd') {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
@@ -798,13 +943,13 @@ async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd'
   const validImages = [];
 
   // pptxgenjs + PowerPoint admiten de forma fiable PNG y JPEG.
-  for (const { url, buffer, mime } of downloaded) {
+  for (const { url, buffer, mime, width, height } of downloaded) {
     if (mime !== 'image/png' && mime !== 'image/jpeg') {
       console.warn(`Imagen omitida en PPTX (${mime || 'formato desconocido'}): ${url}`);
       continue;
     }
 
-    validImages.push({ url, buffer, mime });
+    validImages.push({ url, buffer, mime, width, height });
   }
 
   if (!validImages.length) {
@@ -823,11 +968,21 @@ async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd'
     return;
   }
 
-  for (const { buffer, mime } of validImages) {
+  for (const { buffer, mime, width, height } of validImages) {
     const slide = pptx.addSlide();
     slide.background = { color: 'FFFFFF' };
     slide.addText(title || DEFAULT_TITLE, { x: 0.5, y: 0.2, w: 12, h: 0.5, fontSize: 18, bold: true, color: '111827' });
-    slide.addImage({ data: toDataUri(buffer, mime), x: 0.5, y: 0.8, w: 12.8, h: 6.8 });
+
+    // Insertar con la proporción real de la imagen, centrada en la caja.
+    // Antes se usaba 12.8×6.8 fijo y los mazos 4:3 salían estirados.
+    const placement = fitImageWithinBox(width, height, PPTX_IMAGE_BOX);
+    slide.addImage({
+      data: toDataUri(buffer, mime),
+      x: placement.x,
+      y: placement.y,
+      w: placement.w,
+      h: placement.h
+    });
   }
 
   await pptx.writeFile({ fileName: outputPath });
@@ -846,23 +1001,28 @@ async function createDocxFromImages(imageUrls, outputPath, title, quality = 'sd'
   const validImages = [];
 
   // docx solo admite imágenes PNG y JPEG de forma fiable.
-  for (const { url, buffer, mime } of downloaded) {
+  for (const { url, buffer, mime, width, height } of downloaded) {
     if (mime !== 'image/png' && mime !== 'image/jpeg') {
       console.warn(`Imagen omitida en DOCX (${mime || 'formato desconocido'}): ${url}`);
       continue;
     }
 
-    validImages.push({ url, buffer, mime });
+    validImages.push({ url, buffer, mime, width, height });
   }
 
   for (let index = 0; index < validImages.length; index += 1) {
     const item = validImages[index];
+    const placement = fitImageWithinBox(item.width, item.height, DOCX_IMAGE_BOX);
+
     children.push(new Paragraph({ text: `Slide ${index + 1}`, heading: HeadingLevel.HEADING_2, spacing: { before: 120, after: 120 } }));
     children.push(new Paragraph({
       children: [
         new ImageRun({
           data: item.buffer,
-          transformation: { width: 500, height: 300 }
+          transformation: {
+            width: Math.max(1, Math.round(placement.w)),
+            height: Math.max(1, Math.round(placement.h))
+          }
         })
       ],
       spacing: { after: 200 }
@@ -942,9 +1102,10 @@ async function buildPresentationFileFromImages(imageUrls, format, outputDir, tit
   return { outputFile, filename: path.basename(outputFile) };
 }
 
-function createServiceError(message, status) {
+function createServiceError(message, status, code) {
   const error = new Error(message);
   error.status = status;
+  if (code) error.code = code;
   return error;
 }
 
@@ -1047,6 +1208,9 @@ module.exports = {
   DEFAULT_TITLE,
   DOWNLOADS_DIR,
   SUPPORTED_FORMATS,
+  MAX_SLIDES,
+  MAX_IMAGE_BYTES,
+  MAX_TOTAL_IMAGE_BYTES,
   normalizeSlideShareUrl,
   sanitizeFileName,
   cleanSlideTitle,
@@ -1067,5 +1231,8 @@ module.exports = {
   toDataUri,
   applyImageQuality,
   getImageCandidates,
-  downloadImage
+  downloadImage,
+  downloadImagesConcurrently,
+  getImageDimensions,
+  fitImageWithinBox
 };

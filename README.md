@@ -132,6 +132,18 @@ Para las presentaciones que SlideShare bloquea al hacer `fetch` directo, se pued
 
 El renderizador solo acepta URLs públicas de `slideshare.net`, limita los renders concurrentes y bloquea peticiones del navegador hacia IPs privadas o locales. Si no se configura, la aplicación sigue funcionando con el método `lite` (fetch directo).
 
+## 📦 Límites de conversión
+
+Para no agotar la memoria ni el tiempo de ejecución (especialmente en Vercel), la conversión aplica estos topes:
+
+- **Diapositivas**: 200 en local y **80 en serverless**. Se ajusta con `MAX_SLIDES`.
+- **Tamaño por imagen**: 15 MB (`MAX_IMAGE_BYTES`). Si una variante HD supera el tope, se prueba la siguiente calidad.
+- **Tamaño total de imágenes**: 160 MB en local y **80 MB en serverless** (`MAX_TOTAL_IMAGE_BYTES`). Si se supera, la API responde `413`.
+- **Tiempo de descarga de imágenes**: 5 minutos en local y **35 s en serverless** (`MAX_DOWNLOAD_MS`). Si se agota, responde `504`.
+- **Concurrencia de descarga**: 10 en local y 8 en serverless (`IMAGE_CONCURRENCY`).
+
+Las imágenes se insertan en PPTX y DOCX conservando su proporción real (con bandas blancas si hace falta), sin estirarlas.
+
 ## 💻 Lenguaje de Programación
 
 El proyecto está escrito principalmente en **JavaScript (ES6+)** para tanto el frontend como el backend, ejecutado sobre **Node.js**.
