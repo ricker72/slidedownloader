@@ -79,7 +79,16 @@ body {
 
 /* Barra superior */
 .toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   width: 100%;
+  z-index: 1000;
+  background: rgba(10, 22, 39, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .topbar {
@@ -87,7 +96,11 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 0;
+  padding: 8px 0;
+}
+
+main {
+  padding-top: 72px;
 }
 
 .brand {
