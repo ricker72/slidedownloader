@@ -80,25 +80,29 @@ body {
 .hero-header {
   position: relative;
   overflow: hidden;
-  padding: 22px 0 72px;
+  height: 250px;
+  min-height: 250px;
+  max-height: 250px;
   color: #fff;
-  background:
-    radial-gradient(760px 320px at 90% -18%, rgba(200, 169, 81, 0.18), transparent 62%),
-    radial-gradient(620px 300px at 2% 120%, rgba(64, 105, 156, 0.24), transparent 66%),
-    linear-gradient(135deg, #0a1627 0%, #10233c 56%, #17324f 100%);
-  border-bottom: 1px solid rgba(200, 169, 81, 0.3);
+  background-image: url('banner.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-bottom: none;
 }
 
 .hero-header--home {
-  padding: 15px 0 38px;
+  padding: 0;
+  height: 250px;
+  min-height: 250px;
+  max-height: 250px;
 }
 
 .hero-header::before {
   content: "";
   position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, rgba(231, 207, 138, 0.75), transparent);
+  inset: 0;
+  background: rgba(10, 22, 39, 0.55);
   pointer-events: none;
 }
 
