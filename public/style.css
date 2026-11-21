@@ -25,6 +25,7 @@
   --shadow-card: 0 32px 80px -24px rgba(15, 23, 42, 0.32), 0 12px 32px -18px rgba(15, 23, 42, 0.18);
   --shadow-soft: 0 4px 14px -8px rgba(15, 23, 42, 0.24);
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
 }
 
 *,
@@ -73,7 +74,7 @@ body {
 }
 
 /* ============================================================
-   Banner / Hero
+   Banner / Hero · estilo universitario
    ============================================================ */
 
 .hero-header {
@@ -82,44 +83,61 @@ body {
   padding: 22px 0 72px;
   color: #fff;
   background:
-    radial-gradient(900px 420px at 18% -10%, rgba(59, 130, 246, 0.32), transparent 62%),
-    radial-gradient(760px 420px at 92% 8%, rgba(99, 102, 241, 0.28), transparent 64%),
-    linear-gradient(180deg, #0a1120 0%, #0b1526 62%, #0d1a30 100%);
+    radial-gradient(760px 320px at 90% -18%, rgba(200, 169, 81, 0.18), transparent 62%),
+    radial-gradient(620px 300px at 2% 120%, rgba(64, 105, 156, 0.24), transparent 66%),
+    linear-gradient(135deg, #0a1627 0%, #10233c 56%, #17324f 100%);
+  border-bottom: 1px solid rgba(200, 169, 81, 0.3);
+}
+
+.hero-header--home {
+  padding: 15px 0 38px;
+}
+
+.hero-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(231, 207, 138, 0.75), transparent);
+  pointer-events: none;
 }
 
 .hero-grid {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.075) 1px, transparent 1px);
-  background-size: 52px 52px;
-  mask-image: radial-gradient(ellipse 85% 70% at 50% 0%, #000 35%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 0%, #000 35%, transparent 78%);
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.045) 0,
+    rgba(255, 255, 255, 0.045) 1px,
+    transparent 1px,
+    transparent 36px
+  );
+  mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
 }
 
 .hero-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(100px);
   pointer-events: none;
 }
 
 .hero-glow--one {
-  width: 380px;
-  height: 380px;
-  right: -120px;
+  width: 300px;
+  height: 300px;
+  right: -80px;
   top: -160px;
-  background: rgba(37, 99, 235, 0.5);
+  background: rgba(200, 169, 81, 0.26);
 }
 
 .hero-glow--two {
-  width: 320px;
-  height: 320px;
+  width: 280px;
+  height: 280px;
   left: -130px;
-  bottom: -220px;
-  background: rgba(56, 189, 248, 0.28);
+  bottom: -190px;
+  background: rgba(56, 110, 170, 0.3);
 }
 
 .hero-container {
@@ -133,6 +151,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .brand {
@@ -145,25 +165,26 @@ body {
 }
 
 .brand:focus-visible {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid #e7cf8a;
   outline-offset: 4px;
 }
 
 .brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   flex: none;
-  filter: drop-shadow(0 8px 16px rgba(37, 99, 235, 0.45));
+  filter: drop-shadow(0 8px 16px rgba(8, 20, 36, 0.45));
 }
 
 .brand-name {
+  font-family: var(--font-display);
   font-size: 19px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .brand-name span {
-  color: #93c5fd;
+  color: #e7cf8a;
   font-weight: 600;
 }
 
@@ -181,19 +202,19 @@ body {
   padding: 7px 13px;
   font-size: 12px;
   font-weight: 600;
-  color: #bfdbfe;
+  color: #d8e2ee;
   text-decoration: none;
-  background: rgba(148, 163, 184, 0.1);
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 999px;
   backdrop-filter: blur(6px);
   transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
 }
 
 .topbar-pill:hover {
-  color: #eff6ff;
-  background: rgba(148, 163, 184, 0.2);
-  border-color: rgba(191, 219, 254, 0.42);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(231, 207, 138, 0.5);
 }
 
 .topbar-pill--ghost {
@@ -203,7 +224,7 @@ body {
 .topbar-pill .icon {
   width: 14px;
   height: 14px;
-  color: #fbbf24;
+  color: #e7cf8a;
 }
 
 /* Contenido del hero */
@@ -211,31 +232,40 @@ body {
   max-width: 780px;
   margin-top: 32px;
 }
+
+.hero--home {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 238px;
+  gap: 40px;
+  align-items: center;
+  max-width: none;
+  margin-top: 22px;
+}
+
+.hero-copy-block {
+  max-width: 660px;
 }
 
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  margin-bottom: 18px;
-  font-size: 11.5px;
+  gap: 7px;
+  padding: 5px 11px;
+  margin-bottom: 13px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.18);
-  border: 1px solid rgba(96, 165, 250, 0.35);
+  color: #f0dfa8;
+  background: rgba(200, 169, 81, 0.12);
+  border: 1px solid rgba(200, 169, 81, 0.38);
   border-radius: 999px;
 }
 
-.eyebrow::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18);
+.eyebrow .icon {
+  width: 14px;
+  height: 14px;
+  color: #e7cf8a;
 }
 
 .hero h1 {
@@ -247,26 +277,37 @@ body {
   color: #f8fafc;
 }
 
+.hero--home h1 {
+  max-width: 700px;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 2.7vw, 33px);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: #f8fafc;
+  text-wrap: balance;
+}
+
 .text-gradient {
-  background: linear-gradient(100deg, #93c5fd 0%, #60a5fa 42%, #67e8f9 100%);
+  background: linear-gradient(100deg, #f4e6b7 0%, #dfc06a 48%, #f1e0a4 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .hero-copy {
-  max-width: 620px;
-  margin-top: 14px;
-  font-size: 15.5px;
-  line-height: 1.65;
-  color: #a8b6cd;
+  max-width: 560px;
+  margin-top: 12px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #c3cfde;
 }
 
 .hero-perks {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 22px;
-  margin-top: 20px;
+  gap: 8px;
+  margin-top: 18px;
   list-style: none;
 }
 
@@ -274,15 +315,71 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  padding: 7px 11px;
+  font-size: 12.5px;
   font-weight: 550;
-  color: #cbd5e1;
+  color: #dbe3ec;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
 }
 
 .hero-perks .icon {
-  width: 16px;
-  height: 16px;
-  color: #60a5fa;
+  width: 15px;
+  height: 15px;
+  color: #e7cf8a;
+}
+
+/* Sello académico decorativo */
+.hero-seal {
+  padding: 18px 16px 15px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+  border: 1px solid rgba(200, 169, 81, 0.38);
+  border-radius: 16px;
+  box-shadow: 0 24px 50px -38px rgba(0, 0, 0, 0.9);
+}
+
+.hero-seal-ring {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 10px;
+  border: 1px solid rgba(200, 169, 81, 0.65);
+  border-radius: 50%;
+  background: rgba(200, 169, 81, 0.08);
+}
+
+.hero-seal-icon {
+  width: 27px;
+  height: 27px;
+  color: #e7cf8a;
+}
+
+.hero-seal-title {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.hero-seal-copy {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #aebccd;
+}
+
+.hero-seal-tag {
+  display: block;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #e7cf8a;
 }
 
 /* ============================================================
@@ -292,6 +389,11 @@ body {
 .main-container {
   position: relative;
   z-index: 2;
+}
+
+/* La home usa un banner compacto: la tarjeta no se superpone al hero. */
+.page-home .card {
+  margin-top: 0;
 }
 
 .card {
@@ -501,6 +603,18 @@ body {
   font-weight: 680;
   letter-spacing: 0.01em;
   color: var(--ink-soft);
+}
+
+.field-label--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-label--icon .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
 }
 
 .input-group {
@@ -1191,21 +1305,32 @@ body {
    Responsive
    ============================================================ */
 
-@media (max-width: 760px) {
-  .hero-header {
-    padding-bottom: 62px;
+@media (max-width: 900px) {
+  .hero--home {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 
-  .hero {
-    margin-top: 26px;
+  .hero-seal {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero-header--home {
+    padding-bottom: 30px;
+  }
+
+  .hero--home {
+    margin-top: 18px;
   }
 
   .hero-copy {
-    font-size: 15.5px;
+    font-size: 14px;
   }
 
-  .card {
-    margin-top: -42px;
+  .page-home .card {
+    margin-top: 0;
     padding: 26px 24px 24px;
   }
 
@@ -1227,13 +1352,26 @@ body {
     padding: 0 16px;
   }
 
-  .hero-header {
-    padding: 18px 0 58px;
+  .hero-header--home {
+    padding: 8px 0 12px;
+  }
+
+  .topbar {
+    padding-bottom: 8px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .brand-name {
+    font-size: 17px;
   }
 
   .topbar-pill {
     display: inline-flex;
-    padding: 8px;
+    padding: 6px;
   }
 
   .topbar-pill-label {
@@ -1241,30 +1379,39 @@ body {
   }
 
   .topbar-pill .icon {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
   }
 
-  .hero {
-    margin-top: 22px;
+  .hero--home {
+    margin-top: 8px;
   }
 
-  .hero h1 {
-    font-size: clamp(29px, 8.4vw, 38px);
+  .hero--home h1 {
+    max-width: 100%;
+    font-size: clamp(20px, 5.4vw, 23px);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
   }
 
-  .hero-perks {
-    gap: 8px 16px;
+  /* En móvil el banner funciona como una barra compacta: el contenido
+     empieza antes y la navegación queda siempre a la vista. */
+  .hero--home .eyebrow,
+  .hero--home .hero-copy,
+  .hero--home .hero-perks {
+    display: none;
   }
 
-  .hero-perks li {
-    font-size: 12px;
+  .page-home .card {
+    margin-top: 0;
+    padding: 18px 16px 18px;
+    border-radius: 18px;
   }
 
-  .card {
-    margin-top: -36px;
-    padding: 22px 18px 20px;
-    border-radius: 20px;
+  .page-home .card-header {
+    gap: 8px;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
   }
 
   .ai-url-section {
