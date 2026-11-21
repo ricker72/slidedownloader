@@ -59,24 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   checkServerStatus();
-
-  // Ocultar el banner al hacer scroll y dejar solo el toolbar fijo arriba.
-  const html = document.documentElement;
-  let ticking = false;
-
-  window.addEventListener('scroll', () => {
-    if (!ticking) {
-      window.requestAnimationFrame(() => {
-        if (window.scrollY > 0) {
-          html.classList.add('header--scrolled');
-        } else {
-          html.classList.remove('header--scrolled');
-        }
-        ticking = false;
-      });
-      ticking = true;
-    }
-  }, { passive: true });
 });
 
 /**

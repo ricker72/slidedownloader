@@ -77,86 +77,17 @@ body {
    Banner / Hero · estilo universitario
    ============================================================ */
 
-.hero-header {
-  position: relative;
-  overflow: hidden;
-  height: 250px;
-  min-height: 250px;
-  max-height: 250px;
-  color: #fff;
-  background-image: url('banner.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  border-bottom: none;
-}
-
-.hero-header--home {
-  padding: 0;
-  height: 250px;
-  min-height: 250px;
-  max-height: 250px;
-}
-
-.hero-header::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(10, 22, 39, 0.55);
-  pointer-events: none;
-}
-
-.hero-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.045) 0,
-    rgba(255, 255, 255, 0.045) 1px,
-    transparent 1px,
-    transparent 36px
-  );
-  mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
-}
-
-.hero-glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  pointer-events: none;
-}
-
-.hero-glow--one {
-  width: 300px;
-  height: 300px;
-  right: -80px;
-  top: -160px;
-  background: rgba(200, 169, 81, 0.26);
-}
-
-.hero-glow--two {
-  width: 280px;
-  height: 280px;
-  left: -130px;
-  bottom: -190px;
-  background: rgba(56, 110, 170, 0.3);
-}
-
-.hero-container {
-  position: relative;
-  z-index: 1;
-}
-
 /* Barra superior */
+.toolbar {
+  width: 100%;
+}
+
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 13px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 0;
 }
 
 .brand {
@@ -384,29 +315,6 @@ body {
   font-weight: 700;
   letter-spacing: 0.14em;
   color: #e7cf8a;
-}
-
-/* Banner oculto al hacer scroll y toolbar fija */
-html.header--scrolled .hero-header .hero {
-  display: none;
-}
-
-html.header--scrolled .topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  z-index: 1000;
-  background: rgba(10, 22, 39, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 8px 0;
-}
-
-html.header--scrolled main {
-  padding-top: 72px;
 }
 
 /* ============================================================
