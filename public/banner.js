@@ -12,6 +12,7 @@
   const header = document.getElementById('page-banner');
   if (!header) return;
 
+  const shell = document.querySelector('.topbar-shell');
   const toggle = document.getElementById('banner-toggle');
   const label = toggle && toggle.querySelector('.topbar-pill-label');
   const STORAGE_KEY = 'sd-banner-collapsed';
@@ -26,6 +27,7 @@
 
   function apply(collapsed) {
     header.classList.toggle('is-collapsed', collapsed);
+    if (shell) shell.classList.toggle('is-collapsed', collapsed);
     if (!toggle) return;
 
     toggle.setAttribute('aria-expanded', String(!collapsed));

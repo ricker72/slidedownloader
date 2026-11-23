@@ -360,7 +360,7 @@ main {
   backdrop-filter: blur(16px) saturate(140%);
 }
 
-.hero-header .topbar {
+.topbar-shell .topbar {
   padding: 11px 0;
 }
 
@@ -453,7 +453,7 @@ main {
   transition: transform 0.24s ease;
 }
 
-.hero-header.is-collapsed .banner-toggle-icon {
+.topbar-shell.is-collapsed .banner-toggle-icon {
   transform: rotate(180deg);
 }
 
@@ -485,7 +485,7 @@ main {
     inset: 70px 0 0;
   }
 
-  .hero-header .topbar {
+  .topbar-shell .topbar {
     padding: 9px 0;
   }
 

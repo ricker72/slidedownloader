@@ -14,6 +14,10 @@ test('las tres páginas con banner usan el toolbar fijo y el colapso compartido'
 
     assert.match(html, /class="hero-header"/, `${page}: falta hero-header`);
     assert.match(html, /class="topbar-shell"/, `${page}: falta el contenedor del toolbar`);
+    assert.ok(
+      html.indexOf('class="topbar-shell"') < html.indexOf('<header class="hero-header"'),
+      `${page}: el toolbar debe estar fuera del banner para permanecer fijo`
+    );
     assert.match(html, /id="hero-content"/, `${page}: falta el contenido colapsable`);
     assert.match(html, /id="banner-toggle"/, `${page}: falta el botón de banner`);
     assert.match(html, /aria-controls="hero-content"/, `${page}: el botón no apunta al hero`);
@@ -38,4 +42,5 @@ test('banner.js oculta el banner al desplazarse y recuerda la elección manual',
   assert.match(script, /sessionStorage\.getItem/);
   assert.match(script, /sessionStorage\.setItem/);
   assert.match(script, /classList\.toggle\('is-collapsed', collapsed\)/);
+  assert.match(script, /shell\.classList\.toggle\('is-collapsed', collapsed\)/);
 });
