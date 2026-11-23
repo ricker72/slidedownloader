@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Descargar documentos de Scribd — SlideDownloader</title>
   <meta name="description" content="Descarga documentos públicos de Scribd en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX). Hasta 60 páginas, sin cuenta y sin cookies.">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
@@ -214,6 +214,14 @@
           </div>
         </div>
 
+        <section class="scribd-preview" id="scribd-preview" hidden aria-labelledby="scribd-preview-title">
+          <div class="section-label-row">
+            <span class="field-label" id="scribd-preview-title">Vista previa</span>
+            <span class="section-hint" id="scribd-preview-hint">Cargando páginas...</span>
+          </div>
+          <div class="scribd-preview-grid" id="scribd-preview-grid"></div>
+        </section>
+
         <div class="format-section" id="scribd-format-section" hidden>
           <div class="section-label-row">
             <span class="field-label">Formato de descarga</span>
@@ -326,6 +334,6 @@
 
   <script src="banner.js?v=2"></script>
   <script src="download-utils.js?v=1"></script>
-  <script src="scribd.js?v=4"></script>
+  <script src="scribd.js?v=5"></script>
 </body>
 </html>

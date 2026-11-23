@@ -103,6 +103,11 @@ const scribdDownloadLimiter = rateLimiter({
   max: 8,
   message: 'Demasiadas descargas de Scribd. Espera unos minutos antes de reintentar.'
 });
+const scribdPreviewLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Demasiadas vistas previas de Scribd. Espera unos minutos antes de reintentar.'
+});
 
 module.exports = {
   rateLimiter,
@@ -115,5 +120,6 @@ module.exports = {
   searchConfigLimiter,
   pingLimiter,
   scribdInspectLimiter,
-  scribdDownloadLimiter
+  scribdDownloadLimiter,
+  scribdPreviewLimiter
 };

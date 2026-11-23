@@ -691,6 +691,56 @@ main {
   margin-bottom: 3px;
 }
 
+/* Vista previa de páginas */
+
+.scribd-preview {
+  margin-bottom: 24px;
+}
+
+.scribd-preview[hidden] {
+  display: none;
+}
+
+.scribd-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.scribd-preview-item {
+  min-width: 0;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+}
+
+.scribd-preview-item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  object-position: top center;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.scribd-preview-page {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+  color: var(--muted);
+}
+
+.scribd-preview-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 @media (max-width: 560px) {
   .scribd-document-main {
     flex-direction: column;

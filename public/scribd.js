@@ -23,6 +23,9 @@ const availabilityEl = document.getElementById('scribd-availability');
 const sourceLink = document.getElementById('scribd-source-link');
 const thumbEl = document.getElementById('scribd-thumb');
 const formatSection = document.getElementById('scribd-format-section');
+const previewSection = document.getElementById('scribd-preview');
+const previewGrid = document.getElementById('scribd-preview-grid');
+const previewHint = document.getElementById('scribd-preview-hint');
 
 const statusDot = document.getElementById('scribd-status-dot');
 const statusText = document.getElementById('scribd-status-text');
@@ -55,6 +58,7 @@ const SOURCE_FORMAT_NAMES = {
 
 let currentDocument = null;
 let isBusy = false;
+let previewToken = 0;
 
 /* ------------------------------------------------------------------ *
  * Utilidades
@@ -171,6 +175,10 @@ function normalizeInputUrl(rawValue) {
 
 function resetDocument() {
   currentDocument = null;
+  previewToken += 1;
+  previewSection.hidden = true;
+  previewGrid.replaceChildren();
+  previewHint.textContent = '';
   documentPanel.hidden = true;
   formatSection.hidden = true;
   downloadBtn.disabled = true;
@@ -307,6 +315,69 @@ function renderDocument(info) {
   }
 
   downloadBtn.disabled = !canDownload();
+
+  if (Number.isFinite(info.pageCount) && info.pageCount > 0) {
+    loadPreview(info);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Vista previa de páginas
+ * ------------------------------------------------------------------ */
+
+async function loadPreview(info) {
+  const token = ++previewToken;
+  const url = info.inputValue || info.canonicalUrl;
+
+  previewSection.hidden = false;
+  previewGrid.replaceChildren();
+  previewHint.textContent = 'Cargando páginas...';
+
+  try {
+    const response = await fetch(
+      `/api/scribd/preview?url=${encodeURIComponent(url)}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    const data = await readJson(response);
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'No se pudo cargar la vista previa.');
+    }
+
+    if (token !== previewToken || !currentDocument) return;
+
+    const pages = Array.isArray(data.preview.pages) ? data.preview.pages : [];
+
+    for (const page of pages) {
+      if (typeof page.image !== 'string' || !/^data:image\//i.test(page.image)) continue;
+
+      const item = document.createElement('figure');
+      item.className = 'scribd-preview-item';
+
+      const image = document.createElement('img');
+      image.src = page.image;
+      image.alt = `Página ${page.pageNum}`;
+      image.loading = 'lazy';
+
+      const caption = document.createElement('figcaption');
+      caption.className = 'scribd-preview-page';
+      caption.textContent = `Página ${page.pageNum}`;
+
+      item.append(image, caption);
+      previewGrid.append(item);
+    }
+
+    if (!pages.length) throw new Error('El servidor no devolvió páginas.');
+
+    const total = data.preview.totalPages || info.pageCount;
+    previewHint.textContent = pages.length < total
+      ? `Primeras ${pages.length} de ${total} páginas`
+      : `${total} ${total === 1 ? 'página' : 'páginas'}`;
+  } catch (error) {
+    if (token !== previewToken) return;
+    previewGrid.replaceChildren();
+    previewHint.textContent = 'Vista previa no disponible';
+  }
 }
 
 /* ------------------------------------------------------------------ *

@@ -80,13 +80,13 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 ## 📄 Descargas de Scribd
 
-La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y elige el formato. Se admiten enlaces `/document/{id}`, `/doc/{id}` y `/presentation/{id}` de cualquier subdominio de Scribd.
+La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y una vista previa de las primeras páginas, y elige el formato. Se admiten enlaces `/document/{id}`, `/doc/{id}` y `/presentation/{id}` de cualquier subdominio de Scribd.
 
 **Cómo funciona**
 
 1. Se lee el visor embebido público (`/embeds/{id}/content`), la misma vista que Scribd entrega a cualquier visitante.
 2. Se obtiene el manifiesto de páginas de `/document_downloads/{id}` y se elige el que contiene más páginas.
-3. Cada página se materializa como imagen: se usa la imagen renderizada del CDN cuando existe; si el documento solo tiene capa de texto, la página se reconstruye y se rasteriza con `sharp`.
+3. Cada página se materializa como imagen: el PNG del CDN es un atlas con la diapositiva y fragmentos, así que se recorta según las reglas `clip:rect` del visor para obtener una página limpia del tamaño declarado; si no hay imagen, la página se reconstruye desde su capa de texto con `sharp`.
 4. El archivo final se genera con el mismo pipeline que SlideShare (PDFKit, PptxGenJS y docx).
 
 **Límites y avisos**
@@ -106,6 +106,7 @@ La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF
 | Método | Ruta | Descripción |
 |:---|:---|:---|
 | `GET` | `/api/scribd/inspect?url=` | Metadatos del documento: título, páginas, formatos y permiso de descarga |
+| `GET` | `/api/scribd/preview?url=&pages=` | Miniaturas JPEG de las primeras páginas (máximo 6) para mostrar la vista previa |
 | `POST` | `/api/scribd/download` | Genera el archivo y lo devuelve en la misma respuesta (descarga directa). Cuerpo: `{ "url": "...", "format": "pdf" }` |
 
 ## 🔎 Configuración del filtro de Google

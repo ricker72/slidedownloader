@@ -18,7 +18,8 @@ const { sendGeneratedFile } = require('../utils/fileResponse');
 const { cleanupJobDir } = require('../utils/downloadJob');
 const {
   scribdInspectLimiter,
-  scribdDownloadLimiter
+  scribdDownloadLimiter,
+  scribdPreviewLimiter
 } = require('../middleware/rateLimiter');
 
 function sendError(res, error) {
@@ -52,6 +53,26 @@ router.get('/inspect', scribdInspectLimiter, async (req, res) => {
   try {
     const document = await scribdService.inspect(rawUrl);
     return res.json({ success: true, document });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.get('/preview', scribdPreviewLimiter, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  const rawUrl = req.query.url;
+
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Se requiere el parámetro url con un enlace de Scribd'
+    });
+  }
+
+  try {
+    const preview = await scribdService.preview({ url: rawUrl, limit: req.query.pages });
+    return res.json({ success: true, preview });
   } catch (error) {
     return sendError(res, error);
   }

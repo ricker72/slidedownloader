@@ -46,6 +46,8 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_ASSET_IMAGES_PER_PAGE = 10;
 const CONTEXT_TTL_MS = 5 * 60 * 1000;
 const CONTEXT_CACHE_LIMIT = 20;
+const PREVIEW_PAGES = 6;
+const PREVIEW_WIDTH = 360;
 
 const SCRIBD_HOST_RE = /^(?:[a-z0-9-]+\.)*scribd\.com$/i;
 const ASSET_HOST_RE = /^(?:[a-z0-9-]+\.)*scribdassets\.com$/i;
@@ -811,6 +813,107 @@ function parseImageLayer(html) {
   return images;
 }
 
+/**
+ * El PNG que sirve el CDN no es una imagen de página: es un atlas con la
+ * diapositiva y varios fragmentos de texto/antialias. El HTML del visor indica
+ * cada recorte con `clip:rect(top right bottom left)` y su posición final con
+ * `left`/`top`. Esta función traduce esas reglas a recortes de imagen.
+ */
+function parseAbsImagePlacements(markup) {
+  if (typeof markup !== 'string') return [];
+
+  const placements = [];
+  const imgRe = /<img\b([^>]*)>/gi;
+  let match;
+
+  while ((match = imgRe.exec(markup)) !== null) {
+    const attrs = match[1];
+    if (!/\bclass\s*=\s*"?absimg/i.test(attrs)) continue;
+
+    const rawSrc =
+      (attrs.match(/\borig="([^"]+)"/i) || [])[1] ||
+      (attrs.match(/\bsrc="([^"]+)"/i) || [])[1];
+    if (!rawSrc) continue;
+
+    const src = normalizeAssetUrl(decodeEntities(rawSrc));
+    const style = (attrs.match(/\bstyle="([^"]*)"/i) || [])[1] || '';
+    const left = Number((style.match(/left:\s*(-?[\d.]+)px/) || [])[1]);
+    const top = Number((style.match(/top:\s*(-?[\d.]+)px/) || [])[1]);
+    const clip = style.match(
+      /clip:\s*rect\(\s*(-?[\d.]+)px\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s*\)/i
+    );
+    if (!Number.isFinite(left) || !Number.isFinite(top) || !clip) continue;
+
+    const [, clipTop, clipRight, clipBottom, clipLeft] = clip.map(Number);
+    const sw = clipRight - clipLeft;
+    const sh = clipBottom - clipTop;
+    if (sw <= 0 || sh <= 0) continue;
+
+    placements.push({
+      src,
+      sx: clipLeft,
+      sy: clipTop,
+      sw,
+      sh,
+      dx: left + clipLeft,
+      dy: top + clipTop
+    });
+  }
+
+  return placements;
+}
+
+/**
+ * Compone la diapositiva (902×507, por ejemplo) a partir del atlas devuelto
+ * por el CDN. Devuelve null si el atlas no trae reglas de recorte, en cuyo caso
+ * se usa la imagen tal cual por compatibilidad con formatos antiguos.
+ */
+async function composePageFromAtlas(atlas, placements, page, atlasUrl) {
+  const width = page.width || DEFAULT_PAGE_WIDTH;
+  const height = page.height || DEFAULT_PAGE_HEIGHT;
+  // El CDN puede responder con PNG a una petición .jpg, así que se compara el
+  // nombre base sin extensión además de la URL exacta.
+  const atlasKey = atlasUrl ? atlasUrl.split('/').pop().replace(/\.[^.]+$/, '') : '';
+  const relevant = placements.filter((item) => {
+    if (!atlasKey) return true;
+    if (item.src === atlasUrl) return true;
+    return item.src.split('/').pop().replace(/\.[^.]+$/, '') === atlasKey;
+  });
+  if (!relevant.length) return null;
+
+  const metadata = await sharp(atlas).metadata();
+  const layers = [];
+
+  for (const item of relevant) {
+    const left = Math.max(0, Math.floor(item.sx));
+    const top = Math.max(0, Math.floor(item.sy));
+    const right = Math.min(metadata.width, Math.ceil(item.sx + item.sw));
+    const bottom = Math.min(metadata.height, Math.ceil(item.sy + item.sh));
+    if (right <= left || bottom <= top) continue;
+
+    const dx = Math.round(item.dx);
+    const dy = Math.round(item.dy);
+    if (dx >= width || dy >= height || dx + item.sw <= 0 || dy + item.sh <= 0) continue;
+
+    const crop = await sharp(atlas)
+      .extract({ left, top, width: right - left, height: bottom - top })
+      .resize(Math.max(1, Math.round(item.sw)), Math.max(1, Math.round(item.sh)), { fit: 'fill' })
+      .png()
+      .toBuffer();
+
+    layers.push({ input: crop, left: dx, top: dy });
+  }
+
+  if (!layers.length) return null;
+
+  return sharp({
+    create: { width, height, channels: 3, background: '#ffffff' }
+  })
+    .composite(layers)
+    .png()
+    .toBuffer();
+}
+
 function normalizeWord(value) {
   return String(value)
     .normalize('NFD')
@@ -978,6 +1081,10 @@ async function fetchPageMarkup(page, transport) {
 }
 
 async function loadPageImage(page, transport, options = {}) {
+  let atlas = null;
+  let atlasUrl = null;
+  let atlasMime = null;
+
   for (const candidate of pageImageCandidates(page)) {
     try {
       const buffer = await requestBuffer(transport, candidate, {
@@ -988,11 +1095,34 @@ async function loadPageImage(page, transport, options = {}) {
 
       // El CDN devuelve XML de error con 200 en algunos casos: se descarta.
       if (mime === 'image/png' || mime === 'image/jpeg') {
-        return { pageNum: page.pageNum, buffer, mime };
+        atlas = buffer;
+        atlasUrl = candidate;
+        atlasMime = mime;
+        break;
       }
     } catch {
       /* se prueba el siguiente candidato o el rasterizado */
     }
+  }
+
+  if (atlas) {
+    if (page.contentUrl) {
+      try {
+        const markup = await fetchPageMarkup(page, transport);
+        const placements = parseAbsImagePlacements(markup);
+        const composed = placements.length
+          ? await composePageFromAtlas(atlas, placements, page, atlasUrl)
+          : null;
+
+        if (composed) {
+          return { pageNum: page.pageNum, buffer: composed, mime: 'image/png' };
+        }
+      } catch {
+        /* se conserva la imagen original si el visor cambia de formato */
+      }
+    }
+
+    return { pageNum: page.pageNum, buffer: atlas, mime: atlasMime };
   }
 
   const markup = await fetchPageMarkup(page, transport);
@@ -1309,7 +1439,58 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
     }
   }
 
-  return { inspect, download };
+  /**
+   * Miniaturas de las primeras páginas para mostrarlas antes de descargar.
+   * No genera el archivo final: solo reutiliza la misma materialización de
+   * páginas que usa `download`.
+   */
+  async function preview({ url, limit = PREVIEW_PAGES } = {}) {
+    const normalized = normalizeScribdUrl(url);
+    if (!normalized) {
+      throw createScribdError('El enlace no es válido de Scribd.', 400);
+    }
+
+    const context = await loadDocumentContext(normalized.documentId, transport);
+    const requested = Number(limit);
+    const count = Number.isFinite(requested)
+      ? Math.max(1, Math.min(PREVIEW_PAGES, Math.floor(requested)))
+      : PREVIEW_PAGES;
+
+    const { images } = await materializePages(context.pages.slice(0, count), transport, {
+      obfuscated: context.obfuscated,
+      title: context.title
+    });
+
+    const pages = [];
+    for (const image of images) {
+      const thumbnail = await sharp(image.buffer)
+        .resize({ width: PREVIEW_WIDTH, withoutEnlargement: true })
+        .jpeg({ quality: 74 })
+        .toBuffer();
+
+      pages.push({
+        pageNum: image.pageNum,
+        image: `data:image/jpeg;base64,${thumbnail.toString('base64')}`
+      });
+    }
+
+    if (!pages.length) {
+      throw createScribdError('No se pudo generar la vista previa de este documento.', 502);
+    }
+
+    return {
+      document: {
+        documentId: context.documentId,
+        title: context.title,
+        pageCount: context.pageCount,
+        canonicalUrl: normalized.canonicalUrl
+      },
+      pages,
+      totalPages: context.pages.length
+    };
+  }
+
+  return { inspect, download, preview };
 }
 
 const defaultService = createScribdService({ transport: createConfiguredTransport() });
@@ -1327,9 +1508,12 @@ module.exports = {
   parseJsonpMarkup,
   parseTextLayer,
   parseImageLayer,
+  parseAbsImagePlacements,
+  composePageFromAtlas,
   renderPageToPng,
   looksObfuscated,
   cleanScribdTitle,
   inspect: defaultService.inspect,
-  download: defaultService.download
+  download: defaultService.download,
+  preview: defaultService.preview
 };
