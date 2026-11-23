@@ -12,13 +12,13 @@
  * - Exige `SCRIBD_RELAY_SECRET` mediante `Authorization: Bearer ...`.
  * - No guarda cookies, credenciales ni resultados: solo hace de proxy.
  *
- * Desplegar en Railway/Render/fly.io desde la raíz del repositorio:
- *   start command: node scribd-relay/server.js
+ * Desplegar en Railway/Render/fly.io con Root Directory = `scribd-relay`:
+ *   start command: npm start
  */
 
 const crypto = require('crypto');
 const express = require('express');
-const { createNodeTransport } = require('../services/scribdService');
+const { createNodeTransport } = require('./transport');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3002;

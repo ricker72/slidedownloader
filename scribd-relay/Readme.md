@@ -14,15 +14,12 @@ No usa login, cookies ni credenciales de Scribd.
 ## Despliegue en Railway
 
 1. Crear un servicio nuevo en Railway apuntando a este mismo repositorio.
-2. Desplegar desde la **raíz del repositorio** (necesita `services/`).
-3. Configurar el start command:
-
-   ```bash
-   npm run start:scribd-relay
-   ```
-
-   Equivalente: `node scribd-relay/server.js`.
-
+2. En **Settings → Source**, configurar:
+   - **Root Directory:** `scribd-relay`
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start`
+3. El archivo `railway.json` de esta carpeta ya define el start command, así que
+   normalmente no hace falta escribirlo a mano.
 4. Añadir la variable de entorno:
 
    ```text
