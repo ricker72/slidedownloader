@@ -47,6 +47,8 @@ const MAX_ASSET_IMAGES_PER_PAGE = 10;
 const CONTEXT_TTL_MS = 5 * 60 * 1000;
 const CONTEXT_CACHE_LIMIT = 20;
 
+let lastTlsInfo = null;
+
 const SCRIBD_HOST_RE = /^(?:[a-z0-9-]+\.)*scribd\.com$/i;
 const ASSET_HOST_RE = /^(?:[a-z0-9-]+\.)*scribdassets\.com$/i;
 const LEGACY_HTML_HOST_RE = /^https?:\/\/html\.scribd\.com\//i;
@@ -306,7 +308,13 @@ function createNodeTransport() {
               return;
             }
 
-            resolve({ status, headers: response.headers, buffer });
+            let tls = null;
+            try {
+              if (response.socket && response.socket.getCipher) tls = response.socket.getCipher();
+            } catch {
+              /* ignorar */
+            }
+            resolve({ status, headers: response.headers, buffer, tls });
           });
           response.on('error', reject);
         }
@@ -378,6 +386,8 @@ async function requestBuffer(transport, resourceUrl, options = {}) {
       }
       throw error;
     }
+
+    if (response.tls) lastTlsInfo = response.tls;
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.location || response.headers.Location;
@@ -1057,8 +1067,15 @@ async function loadDocumentContext(documentId, transport) {
       ? embedHtml.slice(0, 700).replace(/\s+/g, ' ').trim()
       : '(sin HTML)';
     const challenge = /challenge|captcha|Just a moment/i.test(embedHtml.slice(0, 8000));
+    const env = [
+      `node=${process.version}`,
+      `proxy=${process.env.HTTPS_PROXY || process.env.https_proxy ? 1 : 0}`,
+      `cafile=${process.env.NODE_EXTRA_CA_CERTS ? 1 : 0}`,
+      `agent=${Object.keys(https.globalAgent.options || {}).join('|')}`,
+      `cipher=${lastTlsInfo ? lastTlsInfo.name : 'none'}`
+    ].join(' ');
     throw createScribdError(
-      `No se pudieron leer las páginas del documento. [diag embed=${embedHtml.length} download=${downloadHtml.length} challenge=${challenge} snippet=${snippet}]`,
+      `No se pudieron leer las páginas del documento. [diag embed=${embedHtml.length} download=${downloadHtml.length} challenge=${challenge} ${env} snippet=${snippet}]`,
       404
     );
   }
