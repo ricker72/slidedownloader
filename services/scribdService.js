@@ -238,6 +238,10 @@ function decodeContentEncoding(buffer, encoding, maxBytes) {
  * @returns {Promise<{ status: number, headers: object, buffer: Buffer }>}
  */
 function createNodeTransport() {
+  // Un agente propio evita el agente global inyectado por plataformas como
+  // Vercel, que sustituye la huella TLS del cliente.
+  const agent = new https.Agent({ ...TLS_OPTIONS, keepAlive: false });
+
   return function transport(resourceUrl, { headers = {}, maxBytes = MAX_HTML_BYTES, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
     return new Promise((resolve, reject) => {
       let parsed;
@@ -261,6 +265,7 @@ function createNodeTransport() {
           path: `${parsed.pathname}${parsed.search}`,
           method: 'GET',
           headers: { 'Accept-Encoding': 'gzip, deflate, br', ...headers },
+          agent,
           ...TLS_OPTIONS
         },
         (response) => {
