@@ -1053,8 +1053,12 @@ async function loadDocumentContext(documentId, transport) {
   const pages = downloadPages.length >= embedPages.length ? downloadPages : embedPages;
 
   if (!pages.length) {
+    const snippet = embedHtml
+      ? embedHtml.slice(0, 700).replace(/\s+/g, ' ').trim()
+      : '(sin HTML)';
+    const challenge = /challenge|captcha|Just a moment/i.test(embedHtml.slice(0, 8000));
     throw createScribdError(
-      'No se pudieron leer las páginas del documento. Puede que Scribd lo haya retirado.',
+      `No se pudieron leer las páginas del documento. [diag embed=${embedHtml.length} download=${downloadHtml.length} challenge=${challenge} snippet=${snippet}]`,
       404
     );
   }
