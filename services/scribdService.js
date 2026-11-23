@@ -1053,6 +1053,17 @@ async function renderPageToPng(page, markup, transport, options = {}) {
  * Obtención de páginas
  * ------------------------------------------------------------------ */
 
+/**
+ * Algunas IPs de servidor reciben 403 de `html.scribdassets.com`, mientras que
+ * el host legacy `html.scribd.com` sirve exactamente los mismos archivos.
+ */
+function legacyAssetUrl(url) {
+  return String(url).replace(
+    /^https:\/\/html\.scribdassets\.com\//i,
+    'https://html.scribd.com/'
+  );
+}
+
 function pageImageCandidates(page) {
   if (!page.contentUrl) return [];
 
@@ -1062,21 +1073,35 @@ function pageImageCandidates(page) {
   if (!match) return [];
 
   const [, origin, prefix, pageNumber, hash] = match;
-  return [
+  const candidates = [
     `${origin}/${prefix}/images/${pageNumber}-${hash}.jpg`,
     `${origin}/${prefix}/images/${pageNumber}-${hash}.png`
   ];
+
+  return Array.from(new Set([...candidates, ...candidates.map(legacyAssetUrl)]));
 }
 
 async function fetchPageMarkup(page, transport) {
   if (page.inlineHtml) return page.inlineHtml;
   if (!page.contentUrl) return null;
 
-  const source = await requestText(transport, page.contentUrl, {
+  const options = {
     accept: 'application/javascript,text/javascript,*/*;q=0.8',
     maxBytes: MAX_HTML_BYTES
-  });
+  };
 
+  try {
+    const source = await requestText(transport, page.contentUrl, options);
+    const markup = parseJsonpMarkup(source);
+    if (markup) return markup;
+  } catch (error) {
+    if (error.status !== 403 && error.status !== 404) throw error;
+  }
+
+  const fallback = legacyAssetUrl(page.contentUrl);
+  if (fallback === page.contentUrl) return null;
+
+  const source = await requestText(transport, fallback, options);
   return parseJsonpMarkup(source);
 }
 

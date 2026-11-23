@@ -197,6 +197,38 @@ test('preview devuelve miniaturas JPEG de las primeras páginas', async () => {
   assert.equal(metadata.height, 3);
 });
 
+test('preview usa el host legacy cuando el CDN de Scribd devuelve 403', async () => {
+  const atlas = await buildAtlas();
+  const transport = fakeTransport([
+    { match: /\/embeds\/42\/content/, reply: embedHtml() },
+    { match: /\/document_downloads\/42/, reply: embedHtml() },
+    // El relay recibe 403 (cuerpo vacío) de scribdassets: se descartan.
+    { match: /html\.scribdassets\.com\/abc123\/images\//, reply: Buffer.alloc(0) },
+    { match: /html\.scribdassets\.com\/abc123\/pages\//, reply: Buffer.alloc(0) },
+    // El host legacy sirve los mismos archivos.
+    { match: /html\.scribd\.com\/abc123\/images\/.*\.png/, reply: atlas },
+    { match: /html\.scribd\.com\/abc123\/pages\//, reply: JSONP_MARKUP }
+  ]);
+  const service = createScribdService({ transport });
+
+  const preview = await service.preview({
+    url: 'https://es.scribd.com/document/42/Prueba'
+  });
+
+  assert.equal(preview.pages.length, 1);
+  const jpeg = Buffer.from(preview.pages[0].image.split(',')[1], 'base64');
+  const metadata = await sharp(jpeg).metadata();
+  assert.equal(metadata.width, 4);
+  assert.equal(metadata.height, 3);
+
+  const { data } = await sharp(jpeg).raw().toBuffer({ resolveWithObject: true });
+  const colors = new Set();
+  for (let index = 0; index < data.length; index += 3) {
+    colors.add(`${data[index]},${data[index + 1]},${data[index + 2]}`);
+  }
+  assert.ok(colors.size > 1, 'la miniatura compuesta no debe salir en blanco');
+});
+
 test('GET /api/scribd/preview valida la url antes de consultar Scribd', async () => {
   const { port, server } = await startServerForTest();
   try {
