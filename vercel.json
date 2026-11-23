@@ -9,9 +9,17 @@
         "memory": 1024,
         "includeFiles": "public/**"
       }
+    },
+    {
+      "src": "api/scribd-edge.mjs",
+      "use": "@vercel/edge"
     }
   ],
   "routes": [
+    {
+      "src": "/api/scribd-edge",
+      "dest": "/api/scribd-edge.mjs"
+    },
     {
       "src": "/(.*)",
       "dest": "/api/index.js"
