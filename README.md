@@ -59,6 +59,21 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 ---
 
+## 🤖 Skills para agentes de IA
+
+El repo incluye skills en formato OpenCode (`.opencode/skills/<id>/SKILL.md`). Se descubren automáticamente al abrir el proyecto y cualquier modelo puede cargarlos con `skill(id)` antes de ejecutar una acción:
+
+- `development-protocol`: 4 fases obligatorias (análisis → plan aprobado → ejecución auditada → build/test).
+- `secure-coding`: seguridad desde la escritura del código.
+- `code-review` + `code-review-security`, `-performance`, `-architecture`, `-testing`: revisión priorizada por perspectivas.
+- `code-improvement-refactor`, `skill-creator`, `mcp-server-builder`: mejora segura, creación de Skills y servidores MCP.
+
+Índice completo y comandos de estado: [`SKILLS_INDEX.md`](SKILLS_INDEX.md). Validación: `node .opencode/skills/skill-creator/scripts/validate-skills.mjs .opencode/skills`.
+
+Los skills de `skills/` y `.cursor/rules/` siguen disponibles para Cursor; los de `.opencode/skills/` son la versión canónica para OpenCode.
+
+---
+
 ## 🛠️ Tecnologías Utilizadas
 
 <div align="center">

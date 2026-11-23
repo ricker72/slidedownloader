@@ -24,6 +24,31 @@ Este documento registra todos los skills disponibles para el asistente de IA en 
 
 ---
 
+## 🤖 Skills de OpenCode incluidos en el repo
+
+Estos skills usan el formato oficial de OpenCode: `.opencode/skills/<id>/SKILL.md`. OpenCode los descubre automáticamente al abrir este repositorio y cualquier modelo puede cargarlos con la herramienta `skill(id)` **antes de ejecutar cualquier acción**.
+
+| ID | Propósito |
+|----|-----------|
+| `development-protocol` | Protocolo obligatorio de 4 fases: análisis, plan aprobado, ejecución auditada y build/test. |
+| `secure-coding` | Escritura segura desde el inicio en web, backend, videojuegos y Android/Windows/Linux. |
+| `code-review` | Orquestador que unifica y prioriza los hallazgos de las revisiones. |
+| `code-review-security` | Inyección, IDOR, SSRF, XSS, CSRF, secretos, crypto y dependencias. |
+| `code-review-performance` | Complejidad, N+1, memoria, concurrencia, E/S y render. |
+| `code-review-architecture` | Acoplamiento, SOLID, contratos públicos y deuda técnica. |
+| `code-review-testing` | Aserciones, casos borde, rutas negativas y determinismo. |
+| `code-improvement-refactor` | Refactorización segura con tests de caracterización y rollback. |
+| `skill-creator` | Diseño y validación de Skills con descripción-enrutador. |
+| `mcp-server-builder` | Diseño, implementación y prueba aislada de servidores MCP. |
+
+**Uso:** cargar, por ejemplo, `skill("development-protocol")` al iniciar cualquier tarea; `code-review` delega en los sub-skills atómicos según el cambio.
+
+**Validación:** `node .opencode/skills/skill-creator/scripts/validate-skills.mjs .opencode/skills`
+
+> Los skills anteriores de `/skills` y `.cursor/rules` siguen vigentes para Cursor. Los de `.opencode/skills` son la versión canónica para OpenCode y cualquier agente que soporte este formato; conviven sin sobrescribirse.
+
+---
+
 ## 🗂️ Archivos de Reglas del Sistema (Siempre activos)
 
 | Archivo | Nombre | Propósito |
