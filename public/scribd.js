@@ -159,7 +159,7 @@ function normalizeInputUrl(rawValue) {
   const hostname = parsed.hostname.toLowerCase();
   const isScribdHost = hostname === 'scribd.com' || hostname.endsWith('.scribd.com');
   const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  const isDocumentPath = /^\/(?:doc|document)\/\d+/i.test(parsed.pathname);
+  const isDocumentPath = /^\/(?:doc|document|presentation)\/\d+/i.test(parsed.pathname);
 
   if (!isScribdHost || !isHttp || parsed.username || parsed.password || parsed.port || !isDocumentPath) {
     return { error: 'Pega un enlace de documento válido de scribd.com.' };

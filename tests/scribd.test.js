@@ -157,6 +157,18 @@ test('normalizeScribdUrl acepta documentos de cualquier subdominio', () => {
   assert.equal(normalizeScribdUrl('https://pt.scribd.com/document/7').documentId, '7');
 });
 
+test('normalizeScribdUrl acepta presentaciones de Scribd', () => {
+  assert.deepEqual(
+    normalizeScribdUrl('https://es.scribd.com/presentation/387702694/Diferencias-Entre-Mono-Poligastricos'),
+    {
+      documentId: '387702694',
+      canonicalUrl: 'https://www.scribd.com/presentation/387702694'
+    }
+  );
+
+  assert.equal(normalizeScribdUrl('https://www.scribd.com/presentation/42/x').documentId, '42');
+});
+
 test('normalizeScribdUrl rechaza dominios, esquemas y rutas no válidas', () => {
   const invalid = [
     'https://example.com/document/123',
@@ -294,6 +306,29 @@ test('inspect devuelve metadatos del documento', async () => {
   assert.deepEqual(info.formats, ['pdf', 'txt']);
   assert.deepEqual(info.supportedFormats, SUPPORTED_FORMATS);
   assert.equal(info.maxPages, MAX_PAGES);
+});
+
+test('inspect acepta enlaces /presentation/ con el mismo id', async () => {
+  const documentId = 900000011;
+  const transport = createFakeTransport(
+    buildDocumentRoutes({
+      documentId,
+      title: 'Presentación de prueba',
+      pages: [
+        { pageNum: 1, contentUrl: 'https://html.scribdassets.com/abc/pages/1-aaa.jsonp' }
+      ]
+    })
+  );
+
+  const service = createScribdService({ transport });
+  const info = await service.inspect(
+    `https://es.scribd.com/presentation/${documentId}/Diferencias-Entre-Mono-Poligastricos`
+  );
+
+  assert.equal(info.documentId, String(documentId));
+  assert.equal(info.title, 'Presentación de prueba');
+  assert.equal(info.pageCount, 1);
+  assert.equal(info.canonicalUrl, `https://www.scribd.com/presentation/${documentId}`);
 });
 
 test('download genera un PDF con todas las páginas y limpia el trabajo', async () => {

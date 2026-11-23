@@ -80,7 +80,7 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 ## 📄 Descargas de Scribd
 
-La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y elige el formato.
+La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y elige el formato. Se admiten enlaces `/document/{id}`, `/doc/{id}` y `/presentation/{id}` de cualquier subdominio de Scribd.
 
 **Cómo funciona**
 

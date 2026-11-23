@@ -88,7 +88,7 @@ function createScribdError(message, status = 500, code = null) {
 /**
  * Normaliza un enlace de Scribd y extrae el id numérico del documento.
  * Acepta `scribd.com`, `es.scribd.com`, `pt.scribd.com`… y las rutas
- * `/document/{id}` y `/doc/{id}`.
+ * `/document/{id}`, `/doc/{id}` y `/presentation/{id}`.
  *
  * @returns {{ documentId: string, canonicalUrl: string } | null}
  */
@@ -114,15 +114,17 @@ function normalizeScribdUrl(rawUrl) {
   if (parsed.port) return null;
   if (!SCRIBD_HOST_RE.test(parsed.hostname)) return null;
 
-  const match = parsed.pathname.match(/^\/(?:document|doc)\/(\d{1,12})(?:\/|$)/i);
+  const match = parsed.pathname.match(/^\/(document|doc|presentation)\/(\d{1,12})(?:\/|$)/i);
   if (!match) return null;
 
-  const documentId = String(Number(match[1]));
+  const documentId = String(Number(match[2]));
   if (!documentId || documentId === '0') return null;
+
+  const kind = match[1].toLowerCase() === 'presentation' ? 'presentation' : 'document';
 
   return {
     documentId,
-    canonicalUrl: `https://www.scribd.com/document/${documentId}`
+    canonicalUrl: `https://www.scribd.com/${kind}/${documentId}`
   };
 }
 
@@ -1102,7 +1104,7 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
     const normalized = normalizeScribdUrl(rawUrl);
     if (!normalized) {
       throw createScribdError(
-        'El enlace no es un documento válido de Scribd. Debe ser del tipo https://es.scribd.com/document/123456789/...',
+        'El enlace no es válido de Scribd. Usa /document/, /doc/ o /presentation/ seguido del id, por ejemplo https://es.scribd.com/document/123456789/...',
         400
       );
     }
@@ -1116,7 +1118,7 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
       downloadable: context.downloadable,
       thumbnailUrl: context.thumbnailUrl,
       formats: context.formats,
-      canonicalUrl: context.canonicalUrl,
+      canonicalUrl: normalized.canonicalUrl,
       maxPages: MAX_PAGES,
       supportedFormats: SUPPORTED_FORMATS.slice()
     };
@@ -1125,7 +1127,10 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
   async function download({ url, format } = {}) {
     const normalized = normalizeScribdUrl(url);
     if (!normalized) {
-      throw createScribdError('El enlace no es un documento válido de Scribd.', 400);
+      throw createScribdError(
+        'El enlace no es válido de Scribd. Usa /document/, /doc/ o /presentation/ seguido del id.',
+        400
+      );
     }
 
     const selectedFormat = String(format || 'pdf').toLowerCase();
