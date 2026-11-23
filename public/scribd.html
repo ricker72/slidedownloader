@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Descargar documentos de Scribd — SlideDownloader</title>
   <meta name="description" content="Descarga documentos públicos de Scribd en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX). Hasta 60 páginas, sin cuenta y sin cookies.">
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=22">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
@@ -99,38 +99,49 @@
     </symbol>
   </svg>
 
-  <header class="hero-header">
+  <header class="hero-header" id="page-banner">
     <div class="hero-grid" aria-hidden="true"></div>
     <div class="hero-glow hero-glow--one" aria-hidden="true"></div>
     <div class="hero-glow hero-glow--two" aria-hidden="true"></div>
 
-    <div class="container hero-container">
-      <div class="topbar">
-        <a class="brand" href="/" aria-label="SlideDownloader, inicio">
-          <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
-            <rect x="1" y="1" width="42" height="42" rx="13" fill="url(#mark-gradient)"/>
-            <path d="M22 10.5v15.2m0 0 5.6-5.6M22 25.7l-5.6-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M13 31.5h18" stroke="rgba(255,255,255,.65)" stroke-width="2.8" stroke-linecap="round"/>
-          </svg>
-          <span class="brand-name">Slide<span>Downloader</span></span>
-        </a>
+    <div class="topbar-shell">
+      <div class="container hero-container">
+        <div class="topbar">
+          <a class="brand" href="/" aria-label="SlideDownloader, inicio">
+            <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+              <rect x="1" y="1" width="42" height="42" rx="13" fill="url(#mark-gradient)"/>
+              <path d="M22 10.5v15.2m0 0 5.6-5.6M22 25.7l-5.6-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M13 31.5h18" stroke="rgba(255,255,255,.65)" stroke-width="2.8" stroke-linecap="round"/>
+            </svg>
+            <span class="brand-name">Slide<span>Downloader</span></span>
+          </a>
 
-        <div class="topbar-actions">
-          <a href="/" class="topbar-pill" aria-label="Descargas de SlideShare">
-            <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
-            <span class="topbar-pill-label">SlideShare</span>
-          </a>
-          <a href="/ai" class="topbar-pill topbar-pill--ghost" aria-label="Asistente IA">
-            <svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>
-            <span class="topbar-pill-label">Asistente IA</span>
-          </a>
-          <a href="/scribd" class="topbar-pill topbar-pill--ghost" aria-label="Documentos de Scribd" aria-current="page">
-            <span class="topbar-pill-label">Scribd</span>
-          </a>
+          <div class="topbar-actions">
+            <a href="/" class="topbar-pill" aria-label="Descargas de SlideShare">
+              <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
+              <span class="topbar-pill-label">SlideShare</span>
+            </a>
+            <a href="/ai" class="topbar-pill topbar-pill--ghost" aria-label="Asistente IA">
+              <svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>
+              <span class="topbar-pill-label">Asistente IA</span>
+            </a>
+            <a href="/scribd" class="topbar-pill topbar-pill--ghost" aria-label="Documentos de Scribd" aria-current="page">
+              <span class="topbar-pill-label">Scribd</span>
+            </a>
+            <button type="button" class="topbar-pill banner-toggle" id="banner-toggle"
+                    aria-controls="hero-content" aria-expanded="true" aria-label="Ocultar banner">
+              <svg class="icon banner-toggle-icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="m6 14 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="topbar-pill-label">Ocultar banner</span>
+            </button>
+          </div>
         </div>
       </div>
+    </div>
 
-      <div class="hero">
+    <div class="container hero-container">
+      <div class="hero" id="hero-content">
         <span class="eyebrow">Descargador de Scribd</span>
         <h1>Descarga documentos de Scribd en <span class="text-gradient">PDF, PowerPoint y Word</span></h1>
         <p class="hero-copy">
@@ -313,6 +324,7 @@
     </div>
   </footer>
 
+  <script src="banner.js?v=1"></script>
   <script src="download-utils.js?v=1"></script>
   <script src="scribd.js?v=4"></script>
 </body>
