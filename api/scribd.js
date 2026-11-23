@@ -81,7 +81,7 @@ router.get('/preview', scribdPreviewLimiter, async (req, res) => {
 router.post('/download', scribdDownloadLimiter, async (req, res) => {
   res.set('Cache-Control', 'no-store');
 
-  const { url, format } = req.body || {};
+  const { url, format, quality } = req.body || {};
 
   if (!url || typeof url !== 'string') {
     return res.status(400).json({
@@ -91,7 +91,7 @@ router.post('/download', scribdDownloadLimiter, async (req, res) => {
   }
 
   try {
-    const result = await scribdService.download({ url, format });
+    const result = await scribdService.download({ url, format, quality });
 
     return sendGeneratedFile(res, {
       filePath: result.filePath,

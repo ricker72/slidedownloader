@@ -80,7 +80,13 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 ## 📄 Descargas de Scribd
 
-La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y una vista previa de las primeras páginas, y elige el formato. Se admiten enlaces `/document/{id}`, `/doc/{id}` y `/presentation/{id}` de cualquier subdominio de Scribd.
+La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF, PPTX, PPSX, POTX y DOCX. Pega el enlace del documento, pulsa **Analizar** para ver sus metadatos y una vista previa de las primeras páginas, elige la calidad y el formato. Se admiten enlaces `/document/{id}`, `/doc/{id}` y `/presentation/{id}` de cualquier subdominio de Scribd.
+
+**Calidad de imagen**
+
+- **HD (por defecto)**: cada página se guarda al doble de su resolución original con remuestreo Lanczos y se codifica en JPEG de alta calidad, de modo que el texto y las imágenes no se ven borrosos al ampliar el archivo.
+- **SD**: conserva la resolución original (más ligero y rápido).
+- En Vercel, si el archivo HD superara el límite de respuesta de la función, se recomprime de forma automática solo lo necesario para que la descarga se complete sin fallar.
 
 **Cómo funciona**
 
@@ -107,7 +113,7 @@ La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF
 |:---|:---|:---|
 | `GET` | `/api/scribd/inspect?url=` | Metadatos del documento: título, páginas, formatos y permiso de descarga |
 | `GET` | `/api/scribd/preview?url=&pages=` | Miniaturas JPEG de las primeras páginas (máximo 6) para mostrar la vista previa |
-| `POST` | `/api/scribd/download` | Genera el archivo y lo devuelve en la misma respuesta (descarga directa). Cuerpo: `{ "url": "...", "format": "pdf" }` |
+| `POST` | `/api/scribd/download` | Genera el archivo y lo devuelve en la misma respuesta (descarga directa). Cuerpo: `{ "url": "...", "format": "pdf", "quality": "hd" }` (calidad `hd` o `sd`; `hd` por defecto) |
 
 ## 🔎 Configuración del filtro de Google
 

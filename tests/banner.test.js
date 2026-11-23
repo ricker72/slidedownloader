@@ -6,41 +6,37 @@ const path = require('path');
 const publicDir = path.join(__dirname, '..', 'public');
 const read = (file) => fs.readFileSync(path.join(publicDir, file), 'utf8');
 
-const bannerPages = ['scribd.html', 'ai.html', 'google.html'];
+const innerPages = ['scribd.html', 'ai.html', 'google.html'];
 
-test('las tres páginas con banner usan el toolbar fijo y el colapso compartido', () => {
-  for (const page of bannerPages) {
+test('las páginas interiores ya no llevan banner', () => {
+  for (const page of innerPages) {
     const html = read(page);
 
-    assert.match(html, /class="hero-header"/, `${page}: falta hero-header`);
-    assert.match(html, /class="topbar-shell"/, `${page}: falta el contenedor del toolbar`);
-    assert.ok(
-      html.indexOf('class="topbar-shell"') < html.indexOf('<header class="hero-header"'),
-      `${page}: el toolbar debe estar fuera del banner para permanecer fijo`
-    );
-    assert.match(html, /id="hero-content"/, `${page}: falta el contenido colapsable`);
-    assert.match(html, /id="banner-toggle"/, `${page}: falta el botón de banner`);
-    assert.match(html, /aria-controls="hero-content"/, `${page}: el botón no apunta al hero`);
-    assert.match(html, /src="banner\.js\?v=\d+"/, `${page}: falta banner.js`);
+    assert.match(html, /<body class="page-no-banner">/, `${page}: falta la clase page-no-banner`);
+    assert.doesNotMatch(html, /hero-header|page-banner|hero-content/, `${page}: queda el banner`);
+    assert.doesNotMatch(html, /banner-toggle/, `${page}: queda el botón del banner`);
+    assert.doesNotMatch(html, /banner\.js/, `${page}: todavía carga banner.js`);
+    assert.match(html, /class="topbar-shell"/, `${page}: debe conservar la barra de navegación`);
   }
 });
 
-test('el CSS define el banner oscuro y el estado colapsado', () => {
-  const css = read('style.css');
+test('no queda ningún script que colapse el banner al desplazarse', () => {
+  assert.equal(fs.existsSync(path.join(publicDir, 'banner.js')), false, 'banner.js debe estar eliminado');
 
-  assert.match(css, /\.topbar-shell \{[^}]*position: fixed/s);
-  assert.match(css, /\.hero-header \{[^}]*linear-gradient/s);
-  assert.match(css, /\.hero-header\.is-collapsed \.hero \{[^}]*max-height: 0/s);
-  assert.match(css, /\.hero-header\.is-collapsed ~ main \.card/);
+  for (const file of fs.readdirSync(publicDir)) {
+    if (!/\.(html|js)$/.test(file)) continue;
+    const content = read(file);
+    assert.doesNotMatch(content, /banner\.js|sd-banner-collapsed/, `${file}: referencia al banner eliminado`);
+  }
 });
 
-test('banner.js oculta el banner al desplazarse y recuerda la elección manual', () => {
-  const script = read('banner.js');
+test('el CSS deja la barra en flujo normal en las páginas sin banner', () => {
+  const css = read('style.css');
 
-  assert.match(script, /addEventListener\('scroll'/);
-  assert.match(script, /scrollY > 120/);
-  assert.match(script, /sessionStorage\.getItem/);
-  assert.match(script, /sessionStorage\.setItem/);
-  assert.match(script, /classList\.toggle\('is-collapsed', collapsed\)/);
-  assert.match(script, /shell\.classList\.toggle\('is-collapsed', collapsed\)/);
+  assert.match(css, /\.page-no-banner \.topbar-shell \{[^}]*position: relative/s);
+  assert.match(css, /\.page-no-banner main \{[^}]*padding-top:/s);
+  assert.match(css, /\.page-no-banner \.card \{[^}]*margin-top: 0/s);
+  assert.match(css, /\.page-no-banner \.shell-nav \{[^}]*position: static/s);
+  assert.doesNotMatch(css, /\.banner-toggle/);
+  assert.doesNotMatch(css, /\.hero-header\.is-collapsed/);
 });

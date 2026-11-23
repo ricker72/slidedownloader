@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Descargar documentos de Scribd — SlideDownloader</title>
   <meta name="description" content="Descarga documentos públicos de Scribd en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX). Hasta 60 páginas, sin cuenta y sin cookies.">
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
-<body>
+<body class="page-no-banner">
   <!-- Sprite de iconos: un solo origen para todos los SVG -->
   <svg class="icon-sprite" aria-hidden="true" focusable="false">
     <defs>
@@ -123,40 +123,10 @@
           <a href="/scribd" class="topbar-pill topbar-pill--ghost" aria-label="Documentos de Scribd" aria-current="page">
             <span class="topbar-pill-label">Scribd</span>
           </a>
-          <button type="button" class="topbar-pill banner-toggle" id="banner-toggle"
-                  aria-controls="hero-content" aria-expanded="true" aria-label="Ocultar banner">
-            <svg class="icon banner-toggle-icon" aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m6 14 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="topbar-pill-label">Ocultar banner</span>
-          </button>
         </div>
       </div>
     </div>
   </div>
-
-  <header class="hero-header" id="page-banner">
-    <div class="hero-grid" aria-hidden="true"></div>
-    <div class="hero-glow hero-glow--one" aria-hidden="true"></div>
-    <div class="hero-glow hero-glow--two" aria-hidden="true"></div>
-
-    <div class="container hero-container">
-      <div class="hero" id="hero-content">
-        <span class="eyebrow">Descargador de Scribd</span>
-        <h1>Descarga documentos de Scribd en <span class="text-gradient">PDF, PowerPoint y Word</span></h1>
-        <p class="hero-copy">
-          Pega el enlace de un documento público, revisa sus datos y descarga hasta 60 páginas.
-          Sin cuenta, sin cookies y sin credenciales.
-        </p>
-
-        <ul class="hero-perks" aria-label="Ventajas">
-          <li><svg class="icon" aria-hidden="true"><use href="#i-page"/></svg> Hasta 60 páginas</li>
-          <li><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg> 5 formatos</li>
-          <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Sin inicio de sesión</li>
-        </ul>
-      </div>
-    </div>
-  </header>
 
   <main>
     <div class="container main-container">
@@ -221,6 +191,40 @@
           </div>
           <div class="scribd-preview-grid" id="scribd-preview-grid"></div>
         </section>
+
+        <div class="quality-section" id="scribd-quality-section" hidden>
+          <div class="section-label-row">
+            <span class="field-label field-label--icon">
+              <svg class="icon" aria-hidden="true"><use href="#i-image"/></svg>
+              Calidad de imagen
+            </span>
+            <span class="section-hint">HD activada por defecto</span>
+          </div>
+
+          <div class="quality-options">
+            <label class="quality-option">
+              <input type="radio" name="scribd-quality" value="hd" checked>
+              <span class="quality-card">
+                <span class="quality-mark quality-mark--hd" aria-hidden="true">HD</span>
+                <span class="quality-text">
+                  <span class="quality-name">Alta resolución</span>
+                  <span class="quality-desc">Texto e imágenes más nítidos</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="quality-option">
+              <input type="radio" name="scribd-quality" value="sd">
+              <span class="quality-card">
+                <span class="quality-mark quality-mark--sd" aria-hidden="true">SD</span>
+                <span class="quality-text">
+                  <span class="quality-name">Estándar</span>
+                  <span class="quality-desc">Archivo más ligero y rápido</span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
 
         <div class="format-section" id="scribd-format-section" hidden>
           <div class="section-label-row">
@@ -332,8 +336,7 @@
     </div>
   </footer>
 
-  <script src="banner.js?v=2"></script>
   <script src="download-utils.js?v=1"></script>
-  <script src="scribd.js?v=5"></script>
+  <script src="scribd.js?v=6"></script>
 </body>
 </html>

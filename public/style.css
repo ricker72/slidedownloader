@@ -420,51 +420,13 @@ main {
     transform 0.3s ease;
 }
 
-.hero-header.is-collapsed .hero {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  transform: translateY(-12px);
-  overflow: hidden;
-  visibility: hidden;
-  pointer-events: none;
-}
-
 .hero-header .hero-perks li {
   background: rgba(255, 255, 255, 0.07);
   border-color: rgba(148, 163, 184, 0.24);
 }
 
-.banner-toggle {
-  cursor: pointer;
-  font-family: var(--font);
-  color: #f0dfa8;
-  border-color: rgba(231, 207, 138, 0.35);
-}
-
-.banner-toggle:hover {
-  color: #fff;
-  background: rgba(231, 207, 138, 0.14);
-  border-color: rgba(231, 207, 138, 0.6);
-}
-
-.banner-toggle-icon {
-  transition: transform 0.24s ease;
-}
-
-.topbar-shell.is-collapsed .banner-toggle-icon {
-  transform: rotate(180deg);
-}
-
 .hero-header ~ main {
   padding-top: 0;
-}
-
-/* Con el banner oculto la tarjeta no debe subir bajo el toolbar fijo. */
-.hero-header.is-collapsed ~ main .card,
-.hero-header.is-collapsed ~ main .main-container > .card:first-child {
-  margin-top: 0;
 }
 
 .hero-header ~ .shell-nav {
@@ -496,6 +458,25 @@ main {
   .hero-header ~ .shell-nav {
     top: 52px;
   }
+}
+
+/* Páginas sin banner (/scribd, /ai, /google): la barra va en el flujo normal
+   en vez de quedarse fija, así no parpadea ni tapa el contenido al scrollear. */
+.page-no-banner .topbar-shell {
+  position: relative;
+  background: rgba(8, 17, 32, 0.96);
+}
+
+.page-no-banner main {
+  padding-top: 26px;
+}
+
+.page-no-banner .card {
+  margin-top: 0;
+}
+
+.page-no-banner .shell-nav {
+  position: static;
 }
 
 /* ============================================================
@@ -2203,6 +2184,12 @@ main {
   .google-main .main-container > .card:first-child {
     margin-top: -36px;
   }
+}
+
+/* En las páginas sin banner ninguna tarjeta debe subir bajo la barra. */
+.page-no-banner .main-container > .card:first-child,
+.page-no-banner .google-main .main-container > .card:first-child {
+  margin-top: 0;
 }
 
 .search-card .card-header {

@@ -12,7 +12,7 @@ const previewCount = document.getElementById('preview-count');
 
 // Estado actual
 let currentFormat = 'pptx';
-let currentQuality = 'sd';
+let currentQuality = 'hd';
 let isProcessing = false;
 
 // Detección automática

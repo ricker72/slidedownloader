@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=23">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
-<body>
+<body class="page-no-banner">
   <svg class="icon-sprite" aria-hidden="true" focusable="false">
     <defs>
       <linearGradient id="ai-mark-gradient" x1="0" y1="0" x2="1" y2="1">
@@ -128,42 +128,10 @@
           <a href="/scribd" class="topbar-pill topbar-pill--ghost" aria-label="Documentos de Scribd">
             <span class="topbar-pill-label">Scribd</span>
           </a>
-          <button type="button" class="topbar-pill banner-toggle" id="banner-toggle"
-                  aria-controls="hero-content" aria-expanded="true" aria-label="Ocultar banner">
-            <svg class="icon banner-toggle-icon" aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m6 14 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="topbar-pill-label">Ocultar banner</span>
-          </button>
         </div>
       </div>
     </div>
   </div>
-
-  <header class="hero-header" id="page-banner">
-    <div class="hero-grid" aria-hidden="true"></div>
-    <div class="hero-glow hero-glow--one" aria-hidden="true"></div>
-    <div class="hero-glow hero-glow--two" aria-hidden="true"></div>
-
-    <div class="container hero-container">
-      <div class="hero" id="hero-content">
-        <span class="eyebrow">
-          <svg class="icon" aria-hidden="true"><use href="#i-ai"/></svg>
-          Asistente de Presentaciones IA
-        </span>
-        <h1>Convierte cualquier presentación en un <span class="text-gradient">prompt profesional</span></h1>
-        <p class="hero-copy">
-          Analiza el enlace de SlideShare y recibe un encargo estructurado para recrear la presentación con tu IA preferida: estilo nuevo, imágenes propias, temas claros y tipografía legible.
-        </p>
-
-        <ul class="hero-perks" aria-label="Ventajas del asistente">
-          <li><svg class="icon" aria-hidden="true"><use href="#i-brain"/></svg> Análisis real de la presentación</li>
-          <li><svg class="icon" aria-hidden="true"><use href="#i-layout"/></svg> Identidad visual propia</li>
-          <li><svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg> Copia y pega en cualquier IA</li>
-        </ul>
-      </div>
-    </div>
-  </header>
 
   <nav class="shell-nav" aria-label="Navegación principal">
     <div class="container nav-container">
@@ -442,7 +410,6 @@
     </div>
   </footer>
 
-  <script src="banner.js?v=2"></script>
   <script src="ai.js?v=2"></script>
 </body>
 </html>

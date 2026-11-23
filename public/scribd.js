@@ -23,6 +23,7 @@ const availabilityEl = document.getElementById('scribd-availability');
 const sourceLink = document.getElementById('scribd-source-link');
 const thumbEl = document.getElementById('scribd-thumb');
 const formatSection = document.getElementById('scribd-format-section');
+const qualitySection = document.getElementById('scribd-quality-section');
 const previewSection = document.getElementById('scribd-preview');
 const previewGrid = document.getElementById('scribd-preview-grid');
 const previewHint = document.getElementById('scribd-preview-hint');
@@ -181,6 +182,7 @@ function resetDocument() {
   previewHint.textContent = '';
   documentPanel.hidden = true;
   formatSection.hidden = true;
+  qualitySection.hidden = true;
   downloadBtn.disabled = true;
   thumbEl.hidden = true;
   thumbEl.removeAttribute('src');
@@ -289,6 +291,7 @@ function renderDocument(info) {
 
   documentPanel.hidden = false;
   formatSection.hidden = false;
+  qualitySection.hidden = false;
 
   const tooManyPages = info.maxPages && info.pageCount > info.maxPages;
 
@@ -394,6 +397,8 @@ async function downloadDocument() {
 
   const selected = document.querySelector('input[name="scribd-format"]:checked');
   const format = selected ? selected.value : 'pdf';
+  const qualityInput = document.querySelector('input[name="scribd-quality"]:checked');
+  const quality = qualityInput ? qualityInput.value : 'hd';
 
   setBusy(true);
   setStatus('info', 'Generando archivo...');
@@ -408,7 +413,7 @@ async function downloadDocument() {
     const response = await fetch('/api/scribd/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: currentDocument.inputValue, format })
+      body: JSON.stringify({ url: currentDocument.inputValue, format, quality })
     });
 
     if (!response.ok) {

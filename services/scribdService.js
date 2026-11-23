@@ -48,6 +48,18 @@ const CONTEXT_TTL_MS = 5 * 60 * 1000;
 const CONTEXT_CACHE_LIMIT = 20;
 const PREVIEW_PAGES = 6;
 const PREVIEW_WIDTH = 360;
+const QUALITY_LEVELS = ['sd', 'hd'];
+// El CDN publica cada página a ~902 px. En HD se reescala con Lanczos para
+// que el visor no interpole la imagen al ampliarla y el texto se vea nítido.
+const HD_SCALE = 2;
+// Vercel limita el cuerpo de respuesta de una función (~4,5 MB). Si el archivo
+// HD superara ese tope, se recomprime solo lo necesario para que la descarga
+// nunca falle. En local no hay tope y se conserva la calidad máxima.
+const OUTPUT_IMAGE_BUDGET = (() => {
+  const configured = Number(process.env.MAX_OUTPUT_IMAGE_BYTES);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return process.env.VERCEL ? 4 * 1024 * 1024 : 0;
+})();
 
 const SCRIBD_HOST_RE = /^(?:[a-z0-9-]+\.)*scribd\.com$/i;
 const ASSET_HOST_RE = /^(?:[a-z0-9-]+\.)*scribdassets\.com$/i;
@@ -868,9 +880,9 @@ function parseAbsImagePlacements(markup) {
  * por el CDN. Devuelve null si el atlas no trae reglas de recorte, en cuyo caso
  * se usa la imagen tal cual por compatibilidad con formatos antiguos.
  */
-async function composePageFromAtlas(atlas, placements, page, atlasUrl) {
-  const width = page.width || DEFAULT_PAGE_WIDTH;
-  const height = page.height || DEFAULT_PAGE_HEIGHT;
+async function composePageFromAtlas(atlas, placements, page, atlasUrl, scale = 1) {
+  const width = Math.round((page.width || DEFAULT_PAGE_WIDTH) * scale);
+  const height = Math.round((page.height || DEFAULT_PAGE_HEIGHT) * scale);
   // El CDN puede responder con PNG a una petición .jpg, así que se compara el
   // nombre base sin extensión además de la URL exacta.
   const atlasKey = atlasUrl ? atlasUrl.split('/').pop().replace(/\.[^.]+$/, '') : '';
@@ -891,13 +903,15 @@ async function composePageFromAtlas(atlas, placements, page, atlasUrl) {
     const bottom = Math.min(metadata.height, Math.ceil(item.sy + item.sh));
     if (right <= left || bottom <= top) continue;
 
-    const dx = Math.round(item.dx);
-    const dy = Math.round(item.dy);
-    if (dx >= width || dy >= height || dx + item.sw <= 0 || dy + item.sh <= 0) continue;
+    const dx = Math.round(item.dx * scale);
+    const dy = Math.round(item.dy * scale);
+    const sw = Math.max(1, Math.round(item.sw * scale));
+    const sh = Math.max(1, Math.round(item.sh * scale));
+    if (dx >= width || dy >= height || dx + sw <= 0 || dy + sh <= 0) continue;
 
     const crop = await sharp(atlas)
       .extract({ left, top, width: right - left, height: bottom - top })
-      .resize(Math.max(1, Math.round(item.sw)), Math.max(1, Math.round(item.sh)), { fit: 'fill' })
+      .resize(sw, sh, { fit: 'fill', kernel: 'lanczos3' })
       .png()
       .toBuffer();
 
@@ -1105,7 +1119,30 @@ async function fetchPageMarkup(page, transport) {
   return parseJsonpMarkup(source);
 }
 
+/**
+ * Prepara la página final. En HD se duplica la resolución con Lanczos y se
+ * codifica en JPEG de alta calidad: pesa mucho menos que PNG y mantiene el
+ * texto nítido, algo importante porque Vercel limita el tamaño de respuesta.
+ */
+async function finalizePageImage(buffer, width, height, scale, sourceMime, alreadyScaled = false) {
+  if (!scale || scale <= 1) return { buffer, mime: sourceMime };
+
+  let pipeline = sharp(buffer);
+
+  if (!alreadyScaled) {
+    pipeline = pipeline.resize(Math.round(width * scale), Math.round(height * scale), {
+      kernel: 'lanczos3'
+    });
+  }
+
+  const jpeg = await pipeline.jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+  return { buffer: jpeg, mime: 'image/jpeg' };
+}
+
 async function loadPageImage(page, transport, options = {}) {
+  const scale = options.quality === 'hd' ? HD_SCALE : 1;
+  const width = page.width || DEFAULT_PAGE_WIDTH;
+  const height = page.height || DEFAULT_PAGE_HEIGHT;
   let atlas = null;
   let atlasUrl = null;
   let atlasMime = null;
@@ -1136,18 +1173,28 @@ async function loadPageImage(page, transport, options = {}) {
         const markup = await fetchPageMarkup(page, transport);
         const placements = parseAbsImagePlacements(markup);
         const composed = placements.length
-          ? await composePageFromAtlas(atlas, placements, page, atlasUrl)
+          ? await composePageFromAtlas(atlas, placements, page, atlasUrl, scale)
           : null;
 
         if (composed) {
-          return { pageNum: page.pageNum, buffer: composed, mime: 'image/png' };
+          const out = await finalizePageImage(composed, width, height, scale, 'image/png', true);
+          return { pageNum: page.pageNum, buffer: out.buffer, mime: out.mime };
         }
       } catch {
         /* se conserva la imagen original si el visor cambia de formato */
       }
     }
 
-    return { pageNum: page.pageNum, buffer: atlas, mime: atlasMime };
+    // Atlas sin reglas de recorte: es la propia página en formatos antiguos.
+    const atlasInfo = await sharp(atlas).metadata();
+    const out = await finalizePageImage(
+      atlas,
+      atlasInfo.width,
+      atlasInfo.height,
+      scale,
+      atlasMime
+    );
+    return { pageNum: page.pageNum, buffer: out.buffer, mime: out.mime };
   }
 
   const markup = await fetchPageMarkup(page, transport);
@@ -1161,7 +1208,8 @@ async function loadPageImage(page, transport, options = {}) {
     options.obfuscated || looksObfuscated(stripTags(markup), options.title || '');
 
   const png = await renderPageToPng(page, markup, transport, { ...options, obfuscated });
-  return { pageNum: page.pageNum, buffer: png, mime: 'image/png' };
+  const out = await finalizePageImage(png, width, height, scale, 'image/png');
+  return { pageNum: page.pageNum, buffer: out.buffer, mime: out.mime };
 }
 
 async function materializePages(pages, transport, options = {}) {
@@ -1197,6 +1245,72 @@ async function materializePages(pages, transport, options = {}) {
     warnings: warnings.slice(0, 8),
     blocked
   };
+}
+
+async function mapWithLimit(items, limit, task) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      results[index] = await task(items[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+function totalImageBytes(images) {
+  return images.reduce((sum, item) => sum + item.buffer.length, 0);
+}
+
+/**
+ * Mantiene el archivo final dentro del tope de respuesta de Vercel. Primero
+ * reduce la calidad JPEG (sin tocar la resolución HD) y, solo si aún no cabe,
+ * baja las dimensiones. `budgetBytes = 0` desactiva el ajuste.
+ */
+async function compactImagesToBudget(images, budgetBytes) {
+  if (!budgetBytes || totalImageBytes(images) <= budgetBytes) return images;
+
+  const steps = [
+    { quality: 85 },
+    { quality: 78 },
+    { quality: 72 },
+    { quality: 66 },
+    { quality: 60 },
+    { quality: 60, factor: 0.85 },
+    { quality: 60, factor: 0.7 },
+    { quality: 60, factor: 0.55 }
+  ];
+
+  for (const step of steps) {
+    const encoded = await mapWithLimit(images, 4, async (item) => {
+      let pipeline = sharp(item.buffer);
+
+      if (step.factor) {
+        const metadata = await sharp(item.buffer).metadata();
+        pipeline = pipeline.resize(
+          Math.max(1, Math.round(metadata.width * step.factor)),
+          Math.max(1, Math.round(metadata.height * step.factor)),
+          { kernel: 'lanczos3' }
+        );
+      }
+
+      return {
+        ...item,
+        mime: 'image/jpeg',
+        buffer: await pipeline.jpeg({ quality: step.quality, mozjpeg: true }).toBuffer()
+      };
+    });
+
+    if (totalImageBytes(encoded) <= budgetBytes) return encoded;
+  }
+
+  return images;
 }
 
 /* ------------------------------------------------------------------ *
@@ -1375,7 +1489,7 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
     };
   }
 
-  async function download({ url, format } = {}) {
+  async function download({ url, format, quality = 'hd' } = {}) {
     const normalized = normalizeScribdUrl(url);
     if (!normalized) {
       throw createScribdError(
@@ -1390,6 +1504,11 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
         `Formato no soportado. Opciones: ${SUPPORTED_FORMATS.join(', ')}`,
         400
       );
+    }
+
+    const selectedQuality = String(quality || 'hd').toLowerCase();
+    if (!QUALITY_LEVELS.includes(selectedQuality)) {
+      throw createScribdError(`Calidad no soportada. Opciones: ${QUALITY_LEVELS.join(', ')}`, 400);
     }
 
     const context = await loadDocumentContext(normalized.documentId, transport);
@@ -1408,10 +1527,16 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
       );
     }
 
-    const { images, warnings, blocked } = await materializePages(context.pages, transport, {
+    const materialized = await materializePages(context.pages, transport, {
       obfuscated: context.obfuscated,
-      title: context.title
+      title: context.title,
+      quality: selectedQuality
     });
+    const { warnings, blocked } = materialized;
+    const images =
+      selectedQuality === 'hd'
+        ? await compactImagesToBudget(materialized.images, OUTPUT_IMAGE_BUDGET)
+        : materialized.images;
 
     if (!images.length) {
       if (blocked) {
@@ -1435,7 +1560,7 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
         selectedFormat,
         jobDir,
         context.title,
-        'sd'
+        selectedQuality
       );
 
       if (blocked) {
@@ -1483,7 +1608,8 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
 
     const { images } = await materializePages(context.pages.slice(0, count), transport, {
       obfuscated: context.obfuscated,
-      title: context.title
+      title: context.title,
+      quality: 'sd'
     });
 
     const pages = [];
@@ -1535,6 +1661,8 @@ module.exports = {
   parseImageLayer,
   parseAbsImagePlacements,
   composePageFromAtlas,
+  compactImagesToBudget,
+  OUTPUT_IMAGE_BUDGET,
   renderPageToPng,
   looksObfuscated,
   cleanScribdTitle,
