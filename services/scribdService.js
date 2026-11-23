@@ -323,6 +323,88 @@ function createNodeTransport() {
   };
 }
 
+/**
+ * Transporte que delega las peticiones a Scribd en un relay desplegado en una
+ * IP no desafiada (por ejemplo, Railway). La generación de archivos sigue
+ * ocurriendo aquí; el relay solo hace el GET HTTP y devuelve la respuesta.
+ *
+ * Se activa al definir `SCRIBD_RELAY_URL` y `SCRIBD_RELAY_SECRET`.
+ */
+function createRelayTransport({ url, secret, fetchImpl = fetch } = {}) {
+  const base = String(url || '').trim().replace(/\/+$/, '');
+  const token = String(secret || '').trim();
+
+  if (!base || !token) {
+    throw createScribdError('Relay de Scribd no configurado.', 500);
+  }
+
+  return async function relayTransport(resourceUrl, { headers = {}, maxBytes = MAX_HTML_BYTES, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
+    let target;
+    try {
+      target = `${base}/fetch?url=${encodeURIComponent(resourceUrl)}`;
+      // Validación temprana: el relay volverá a comprobar el host.
+      new URL(resourceUrl);
+    } catch {
+      throw createScribdError('Recurso de Scribd no válido.', 502);
+    }
+
+    let response;
+    try {
+      response = await fetchImpl(target, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Scribd-Headers': JSON.stringify(headers)
+        },
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+    } catch (error) {
+      if (error && (error.name === 'TimeoutError' || error.code === 'ETIMEDOUT')) {
+        throw createScribdError('Scribd tardó demasiado en responder.', 504);
+      }
+      throw createScribdError('No se pudo contactar con el relay de Scribd.', 502);
+    }
+
+    if (!response.ok) {
+      throw createScribdError(`El relay de Scribd respondió con un error (HTTP ${response.status}).`, 502);
+    }
+
+    let buffer;
+    try {
+      buffer = Buffer.from(await response.arrayBuffer());
+    } catch {
+      throw createScribdError('No se pudo leer la respuesta del relay de Scribd.', 502);
+    }
+
+    if (buffer.length > maxBytes) {
+      throw createScribdError('La respuesta de Scribd es demasiado grande.', 502);
+    }
+
+    let upstreamHeaders = {};
+    try {
+      upstreamHeaders = JSON.parse(response.headers.get('x-upstream-headers') || '{}');
+    } catch {
+      // Un relay defectuoso no debería romper el parseo del documento.
+    }
+
+    return {
+      status: Number(response.headers.get('x-upstream-status')) || 502,
+      headers: upstreamHeaders,
+      buffer
+    };
+  };
+}
+
+function createConfiguredTransport() {
+  const relayUrl = String(process.env.SCRIBD_RELAY_URL || '').trim();
+  const relaySecret = String(process.env.SCRIBD_RELAY_SECRET || '').trim();
+
+  if (relayUrl && relaySecret) {
+    return createRelayTransport({ url: relayUrl, secret: relaySecret });
+  }
+
+  return createNodeTransport();
+}
+
 function mapHttpError(status) {
   if (status === 404 || status === 410) {
     return createScribdError('El documento no existe o fue retirado de Scribd.', 404);
@@ -1230,13 +1312,14 @@ function createScribdService({ transport = createNodeTransport() } = {}) {
   return { inspect, download };
 }
 
-const defaultService = createScribdService();
+const defaultService = createScribdService({ transport: createConfiguredTransport() });
 
 module.exports = {
   MAX_PAGES,
   SUPPORTED_FORMATS,
   createScribdService,
   createNodeTransport,
+  createRelayTransport,
   decodeContentEncoding,
   normalizeScribdUrl,
   extractEmbedConfig,
