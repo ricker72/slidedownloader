@@ -142,6 +142,25 @@ test('parseAbsImagePlacements convierte clip:rect en recortes y posiciones', () 
   });
 });
 
+test('parseAbsImagePlacements conserva desplazamientos negativos con clip grande', () => {
+  const markup = `
+    <div class="newpage" id="page1" style="width: 902px; height: 507px">
+      <img class="absimg" style="left:-623px;top:-130px;width:904px;height:715px;clip:rect(621px 888px 625px 877px)" orig="https://html.scribdassets.com/real/images/1-hash.png"/>
+    </div>`;
+  const placements = parseAbsImagePlacements(markup);
+
+  assert.equal(placements.length, 1);
+  assert.deepEqual(placements[0], {
+    src: 'https://html.scribdassets.com/real/images/1-hash.png',
+    sx: 877,
+    sy: 621,
+    sw: 11,
+    sh: 4,
+    dx: 254,
+    dy: 491
+  });
+});
+
 test('composePageFromAtlas recorta la diapositiva y aplica los fragmentos', async () => {
   const atlas = await buildAtlas();
   const placements = parseAbsImagePlacements(PLACEMENT_MARKUP);

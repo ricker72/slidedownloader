@@ -1186,13 +1186,35 @@ async function loadPageImage(page, transport, options = {}) {
     }
 
     // Atlas sin reglas de recorte: es la propia página en formatos antiguos.
-    const atlasInfo = await sharp(atlas).metadata();
+    // Se normaliza al tamaño declarado para que todas las páginas mantengan
+    // las mismas dimensiones aunque el CDN sirva atlas con otro tamaño.
+    let atlasBuffer = atlas;
+    try {
+      const meta = await sharp(atlas).metadata();
+      if (
+        !meta.width ||
+        !meta.height ||
+        Math.abs(meta.width - width) > 8 ||
+        Math.abs(meta.height - height) > 8
+      ) {
+        atlasBuffer = await sharp(atlas)
+          .resize(width, height, {
+            fit: 'contain',
+            background: '#ffffff',
+            kernel: 'lanczos3'
+          })
+          .toBuffer();
+      }
+    } catch {
+      // Se conserva el buffer original si no se puede inspeccionar.
+    }
     const out = await finalizePageImage(
-      atlas,
-      atlasInfo.width,
-      atlasInfo.height,
+      atlasBuffer,
+      width,
+      height,
       scale,
-      atlasMime
+      atlasMime,
+      false
     );
     return { pageNum: page.pageNum, buffer: out.buffer, mime: out.mime };
   }

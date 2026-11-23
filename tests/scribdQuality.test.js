@@ -79,6 +79,99 @@ test('la calidad SD conserva la resolución original', async () => {
   assert.deepEqual(await imageDimensionsFromOffice(buffer), { width: 4, height: 3 });
 });
 
+test('un atlas sin recortes se normaliza al tamaño declarado de la página', async () => {
+  const markup = '<div class="newpage" id="page1" style="width: 4px; height: 3px"></div>';
+  const jsonp = `window.page1_callback(${JSON.stringify([markup])});`;
+  const embedHtml = EMBED_HTML.replace('"id":7', '"id":8');
+  const transport = async (url) => {
+    if (/\/embeds\/8\/content/.test(url) || /\/document_downloads\/8/.test(url)) {
+      return { status: 200, headers: {}, buffer: Buffer.from(embedHtml) };
+    }
+    if (/\/pages\/1-/.test(url)) {
+      return { status: 200, headers: {}, buffer: Buffer.from(jsonp) };
+    }
+    if (/\/images\//.test(url)) {
+      const atlas = await sharp({
+        create: { width: 20, height: 16, channels: 3, background: '#ff0000' }
+      })
+        .png()
+        .toBuffer();
+      return { status: 200, headers: {}, buffer: atlas };
+    }
+    return { status: 404, headers: {}, buffer: Buffer.alloc(0) };
+  };
+
+  const service = createScribdService({ transport });
+  const result = await service.download({
+    url: 'https://es.scribd.com/document/8/Calidad',
+    format: 'pptx',
+    quality: 'sd'
+  });
+  const buffer = fs.readFileSync(result.filePath);
+  fs.rmSync(path.dirname(result.filePath), { recursive: true, force: true });
+
+  assert.deepEqual(await imageDimensionsFromOffice(buffer), { width: 4, height: 3 });
+});
+
+test('una composición con poca tinta no se sustituye por el atlas completo', async () => {
+  const markup = `
+    <div class="newpage" id="page1" style="width: 100px; height: 100px">
+      <img class="absimg" style="left:45px;top:-50px;width:110px;height:110px;clip:rect(100px 10px 105px 5px)" orig="http://html.scribd.com/abc/images/1-hash.png"/>
+    </div>`;
+  const jsonp = `window.page1_callback(${JSON.stringify([markup])});`;
+  const embedHtml = EMBED_HTML
+    .replace('"id":7', '"id":9')
+    .replace('origWidth: 4, origHeight: 3', 'origWidth: 100, origHeight: 100');
+  const transport = async (url) => {
+    if (/\/embeds\/9\/content/.test(url) || /\/document_downloads\/9/.test(url)) {
+      return { status: 200, headers: {}, buffer: Buffer.from(embedHtml) };
+    }
+    if (/\/pages\/1-/.test(url)) {
+      return { status: 200, headers: {}, buffer: Buffer.from(jsonp) };
+    }
+    if (/\/images\//.test(url)) {
+      const atlas = await sharp({
+        create: { width: 110, height: 110, channels: 3, background: '#ffffff' }
+      })
+        .composite([
+          {
+            input: Buffer.from('<svg width="5" height="5"><rect width="5" height="5" fill="#000000"/></svg>'),
+            left: 5,
+            top: 100
+          }
+        ])
+        .png()
+        .toBuffer();
+      return { status: 200, headers: {}, buffer: atlas };
+    }
+    return { status: 404, headers: {}, buffer: Buffer.alloc(0) };
+  };
+
+  const service = createScribdService({ transport });
+  const result = await service.download({
+    url: 'https://es.scribd.com/document/9/Calidad',
+    format: 'pptx',
+    quality: 'sd'
+  });
+  const buffer = fs.readFileSync(result.filePath);
+  fs.rmSync(path.dirname(result.filePath), { recursive: true, force: true });
+
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(buffer);
+  const media = Object.keys(zip.files).find(
+    (name) => /^(?:word|ppt)\/media\//.test(name) && !zip.files[name].dir
+  );
+  assert.ok(media);
+  const image = await zip.file(media).async('nodebuffer');
+  const { data, info } = await sharp(image).raw().toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, 100);
+  assert.equal(info.height, 100);
+
+  const pixel = (x, y) => Array.from(data.subarray((y * info.width + x) * info.channels, (y * info.width + x) * info.channels + 3));
+  assert.deepEqual(pixel(52, 52), [0, 0, 0], 'el fragmento debe quedar en el centro');
+  assert.deepEqual(pixel(7, 97), [255, 255, 255], 'no debe aparecer la franja del atlas');
+});
+
 test('se rechaza una calidad desconocida', async () => {
   const service = createScribdService({ transport: fakeTransport() });
   await assert.rejects(
