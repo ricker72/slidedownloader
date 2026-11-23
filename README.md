@@ -98,6 +98,7 @@ La página `/scribd` permite descargar documentos **públicos** de Scribd en PDF
 - Los documentos retirados o inexistentes responden `404`.
 - Descarga únicamente material sobre el que tengas derechos. Respeta los términos de Scribd y los derechos de autor.
 - En Vercel el sistema de archivos solo permite `/tmp` y las funciones tienen un límite de ejecución de 60 s; los archivos grandes pueden requerir ejecutar el proyecto en un servidor propio.
+- Scribd sirve una página «Client Challenge» a varias IPs de centros de datos. Cuando ocurre, la API responde `403` con un mensaje específico; el descargador funciona al ejecutarlo en local o en un servidor con una IP no desafiada por Scribd.
 
 **API**
 

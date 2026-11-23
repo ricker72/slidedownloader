@@ -331,6 +331,22 @@ test('inspect acepta enlaces /presentation/ con el mismo id', async () => {
   assert.equal(info.canonicalUrl, `https://www.scribd.com/presentation/${documentId}`);
 });
 
+test('inspect distingue el Client Challenge de un documento retirado', async () => {
+  const documentId = 900000012;
+  const challengeHtml = '<!doctype html><html><head><title>Client Challenge</title></head><body></body></html>';
+  const transport = createFakeTransport([
+    { match: /\/embeds\//, reply: challengeHtml },
+    { match: /\/document_downloads\//, reply: challengeHtml }
+  ]);
+
+  const service = createScribdService({ transport });
+
+  await assert.rejects(
+    service.inspect(`https://es.scribd.com/document/${documentId}/x`),
+    (error) => error.status === 403 && /bloqueó la petición/i.test(error.message)
+  );
+});
+
 test('download genera un PDF con todas las páginas y limpia el trabajo', async () => {
   const documentId = 900000002;
   const transport = createFakeTransport(

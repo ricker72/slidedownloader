@@ -47,8 +47,6 @@ const MAX_ASSET_IMAGES_PER_PAGE = 10;
 const CONTEXT_TTL_MS = 5 * 60 * 1000;
 const CONTEXT_CACHE_LIMIT = 20;
 
-let lastTlsInfo = null;
-
 const SCRIBD_HOST_RE = /^(?:[a-z0-9-]+\.)*scribd\.com$/i;
 const ASSET_HOST_RE = /^(?:[a-z0-9-]+\.)*scribdassets\.com$/i;
 const LEGACY_HTML_HOST_RE = /^https?:\/\/html\.scribd\.com\//i;
@@ -238,14 +236,6 @@ function decodeContentEncoding(buffer, encoding, maxBytes) {
  * @returns {Promise<{ status: number, headers: object, buffer: Buffer }>}
  */
 function createNodeTransport() {
-  // Un agente propio evita el agente global inyectado por plataformas como
-  // Vercel, que sustituye la huella TLS del cliente.
-  const agent = new https.Agent({
-    ...TLS_OPTIONS,
-    ALPNProtocols: ['http/1.1'],
-    keepAlive: false
-  });
-
   return function transport(resourceUrl, { headers = {}, maxBytes = MAX_HTML_BYTES, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
     return new Promise((resolve, reject) => {
       let parsed;
@@ -269,7 +259,6 @@ function createNodeTransport() {
           path: `${parsed.pathname}${parsed.search}`,
           method: 'GET',
           headers: { 'Accept-Encoding': 'gzip, deflate, br', ...headers },
-          agent,
           ...TLS_OPTIONS
         },
         (response) => {
@@ -317,13 +306,7 @@ function createNodeTransport() {
               return;
             }
 
-            let tls = null;
-            try {
-              if (response.socket && response.socket.getCipher) tls = response.socket.getCipher();
-            } catch {
-              /* ignorar */
-            }
-            resolve({ status, headers: response.headers, buffer, tls });
+            resolve({ status, headers: response.headers, buffer });
           });
           response.on('error', reject);
         }
@@ -395,8 +378,6 @@ async function requestBuffer(transport, resourceUrl, options = {}) {
       }
       throw error;
     }
-
-    if (response.tls) lastTlsInfo = response.tls;
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.location || response.headers.Location;
@@ -1072,19 +1053,22 @@ async function loadDocumentContext(documentId, transport) {
   const pages = downloadPages.length >= embedPages.length ? downloadPages : embedPages;
 
   if (!pages.length) {
-    const snippet = embedHtml
-      ? embedHtml.slice(0, 700).replace(/\s+/g, ' ').trim()
-      : '(sin HTML)';
-    const challenge = /challenge|captcha|Just a moment/i.test(embedHtml.slice(0, 8000));
-    const env = [
-      `node=${process.version}`,
-      `proxy=${process.env.HTTPS_PROXY || process.env.https_proxy ? 1 : 0}`,
-      `cafile=${process.env.NODE_EXTRA_CA_CERTS ? 1 : 0}`,
-      `agent=${Object.keys(https.globalAgent.options || {}).join('|')}`,
-      `cipher=${lastTlsInfo ? lastTlsInfo.name : 'none'}`
-    ].join(' ');
+    // Scribd sirve una página «Client Challenge» a las IPs de centros de datos
+    // (por ejemplo, la salida de Vercel). No es un documento retirado: conviene
+    // distinguirlo para no culpar al enlace cuando el bloqueo es del servidor.
+    const challenged =
+      /Client Challenge/i.test(embedHtml.slice(0, 8000)) ||
+      /Client Challenge/i.test(downloadHtml.slice(0, 8000));
+
+    if (challenged) {
+      throw createScribdError(
+        'Scribd bloqueó la petición desde el servidor desplegado. El descargador funciona ejecutándolo en local; despliega la aplicación en una IP no desafiada por Scribd.',
+        403
+      );
+    }
+
     throw createScribdError(
-      `No se pudieron leer las páginas del documento. [diag embed=${embedHtml.length} download=${downloadHtml.length} challenge=${challenge} ${env} snippet=${snippet}]`,
+      'No se pudieron leer las páginas del documento. Puede que Scribd lo haya retirado.',
       404
     );
   }
