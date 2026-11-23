@@ -240,7 +240,11 @@ function decodeContentEncoding(buffer, encoding, maxBytes) {
 function createNodeTransport() {
   // Un agente propio evita el agente global inyectado por plataformas como
   // Vercel, que sustituye la huella TLS del cliente.
-  const agent = new https.Agent({ ...TLS_OPTIONS, keepAlive: false });
+  const agent = new https.Agent({
+    ...TLS_OPTIONS,
+    ALPNProtocols: ['http/1.1'],
+    keepAlive: false
+  });
 
   return function transport(resourceUrl, { headers = {}, maxBytes = MAX_HTML_BYTES, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
     return new Promise((resolve, reject) => {
