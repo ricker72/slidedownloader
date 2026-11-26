@@ -39,13 +39,17 @@ setInterval(() => {
  * @param {number} options.statusCode - Código HTTP de la respuesta (default 429).
  * @returns {Function} Middleware Express.
  */
-function rateLimiter({ windowMs = 60 * 1000, max = 60, message = 'Demasiadas peticiones. Intenta de nuevo más tarde.', statusCode = 429 } = {}) {
+function rateLimiter({ windowMs = 60 * 1000, max = 60, message = 'Demasiadas peticiones. Intenta de nuevo más tarde.', statusCode = 429, keyFn } = {}) {
   const store = new Map();
   stores.add(store);
 
   return (req, res, next) => {
     // Usar req.ip (Express ya resuelve trust proxy si está configurado).
-    const ip = req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
+    // Los limitadores que pasan `keyFn` ignoran X-Forwarded-For: en una
+    // instalación sin proxy de confianza ese header es controlado por el cliente.
+    const ip = keyFn
+      ? keyFn(req)
+      : req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
     const now = Date.now();
 
     let entry = store.get(ip);
@@ -92,6 +96,22 @@ const fileLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20 });
 const searchConfigLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30 });
 const pingLimiter = rateLimiter({ windowMs: 60 * 1000, max: 60 });
 
+// Jobs asíncronos: encolar es tan caro como una descarga, y sondear consume
+// una invocación por petición, así que ambos tienen su propio contador.
+const socketKey = (req) => req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
+const jobsLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Demasiados trabajos encolados. Intenta de nuevo más tarde.',
+  keyFn: socketKey
+});
+const jobPollLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: 'Demasiadas consultas de estado. Intenta de nuevo más tarde.',
+  keyFn: socketKey
+});
+
 // Scribd: cada análisis o descarga hace varias peticiones al CDN externo.
 const scribdInspectLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000,
@@ -119,6 +139,8 @@ module.exports = {
   fileLimiter,
   searchConfigLimiter,
   pingLimiter,
+  jobsLimiter,
+  jobPollLimiter,
   scribdInspectLimiter,
   scribdDownloadLimiter,
   scribdPreviewLimiter

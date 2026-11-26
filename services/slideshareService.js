@@ -21,6 +21,8 @@ const PDFDocument = require('pdfkit');
 const PptxGenJS = require('pptxgenjs');
 const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } = require('docx');
 const { v4: uuidv4 } = require('uuid');
+const { createOcrEngine } = require('./ocrService');
+const { TEXT_FORMATS, createTextExportFile } = require('./textExportService');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -125,6 +127,37 @@ function readPositiveInt(name, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
+function readIntInRange(name, fallback, min, max) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
+}
+
+// Calidad del JPEG generado al convertir WebP y modo de conversión preferido.
+// `auto` elige PNG para diapositivas con aspecto de texto/diagrama; `jpeg` y
+// `png` fuerzan el formato. Los valores se validan para no romper sharp.
+const JPEG_QUALITY = readIntInRange('JPEG_QUALITY', 92, 1, 100);
+const WEBP_PNG_MAX_BYTES = readPositiveInt('WEBP_PNG_MAX_BYTES', 8 * 1024 * 1024);
+const WEBP_CONVERSION_MODES = ['auto', 'jpeg', 'png'];
+
+function resolveConversionMode(value, fallback = 'auto') {
+  const mode = String(value ?? '').toLowerCase();
+  return WEBP_CONVERSION_MODES.includes(mode) ? mode : fallback;
+}
+
+const WEBP_CONVERSION = resolveConversionMode(process.env.WEBP_CONVERSION);
+
+function resolveJpegQuality(value) {
+  const candidate = Number(value);
+  return Number.isInteger(candidate) && candidate >= 1 && candidate <= 100
+    ? candidate
+    : JPEG_QUALITY;
+}
+
+function resolvePngMaxBytes(value) {
+  const candidate = Number(value);
+  return Number.isInteger(candidate) && candidate > 0 ? candidate : WEBP_PNG_MAX_BYTES;
+}
+
 // Tope de diapositivas por presentación. En serverless se baja porque cada
 // diapositiva HD ocupa memoria y tiempo dentro de una función de 60 s.
 const MAX_SLIDES = readPositiveInt('MAX_SLIDES', isVercel ? 80 : 200);
@@ -139,6 +172,32 @@ const IMAGE_CONCURRENCY = readPositiveInt('IMAGE_CONCURRENCY', isVercel ? 8 : 10
 const IMAGE_TIMEOUT_MS = readPositiveInt('IMAGE_TIMEOUT_MS', isVercel ? 15000 : 30000);
 const MAX_DOWNLOAD_MS = readPositiveInt('MAX_DOWNLOAD_MS', isVercel ? 35000 : 5 * 60 * 1000);
 
+// Estimación orientativa que se muestra en la UI antes de descargar. No es una
+// medida real: el peso final depende del contenido de cada diapositiva.
+const ESTIMATED_BYTES_PER_SLIDE_SD = readPositiveInt('ESTIMATED_BYTES_PER_SLIDE_SD', 120 * 1024);
+const ESTIMATED_BYTES_PER_SLIDE_HD = readPositiveInt('ESTIMATED_BYTES_PER_SLIDE_HD', 450 * 1024);
+const PREVIEW_LIMIT = 200;
+
+function getLimits() {
+  return {
+    maxSlides: MAX_SLIDES,
+    maxImageBytes: MAX_IMAGE_BYTES,
+    maxTotalImageBytes: MAX_TOTAL_IMAGE_BYTES,
+    maxDownloadMs: MAX_DOWNLOAD_MS,
+    imageConcurrency: IMAGE_CONCURRENCY,
+    previewLimit: PREVIEW_LIMIT,
+    bytesPerSlide: {
+      sd: ESTIMATED_BYTES_PER_SLIDE_SD,
+      hd: ESTIMATED_BYTES_PER_SLIDE_HD
+    },
+    webpConversion: {
+      mode: WEBP_CONVERSION,
+      jpegQuality: JPEG_QUALITY,
+      pngMaxBytes: WEBP_PNG_MAX_BYTES
+    }
+  };
+}
+
 /**
  * Las páginas de SlideShare incluyen, además de las diapositivas, miniaturas
  * de presentaciones relacionadas, avatares y logos. Si se descargan tal cual,
@@ -147,8 +206,10 @@ const MAX_DOWNLOAD_MS = readPositiveInt('MAX_DOWNLOAD_MS', isVercel ? 35000 : 5 
  * Este selector agrupa las URLs por carpeta del CDN (`.../<deck>/<version>/`)
  * y se queda con la carpeta que contiene más diapositivas: la presentación
  * actual. Después elimina duplicados por número de diapositiva y las ordena.
+ *
+ * @param {number} [limit] - tope devuelto; Infinity permite contar las detectadas.
  */
-function selectSlideImages(list) {
+function selectSlideImages(list, limit = MAX_SLIDES) {
   const urls = dedupeUrls(list).filter(isLikelyImageUrl);
   const groups = new Map();
 
@@ -195,7 +256,7 @@ function selectSlideImages(list) {
       .map(([, value]) => value.url);
 
     if (ordered.length) {
-      return ordered.slice(0, MAX_SLIDES);
+      return ordered.slice(0, limit);
     }
   }
 
@@ -204,7 +265,7 @@ function selectSlideImages(list) {
     (url) => !/avatar|profile|user[-_]?photo|logo|icon|sprite|placeholder|default[-_]/i.test(url)
   );
 
-  return (filtered.length ? filtered : urls).slice(0, MAX_SLIDES);
+  return (filtered.length ? filtered : urls).slice(0, limit);
 }
 
 /**
@@ -275,7 +336,7 @@ function toDataUri(buffer, mime) {
 const QUALITY_LEVELS = ['sd', 'hd'];
 
 // Formatos que la API puede generar de verdad.
-const SUPPORTED_FORMATS = ['pdf', 'pptx', 'ppsx', 'potx', 'docx'];
+const SUPPORTED_FORMATS = ['pdf', 'pptx', 'ppsx', 'potx', 'docx', 'txt', 'md'];
 
 // PPSX y POTX son el mismo paquete OOXML que PPTX con otro tipo de contenido.
 const PPTX_CONTENT_TYPE =
@@ -362,24 +423,104 @@ function getImageCandidates(imageUrl, quality = 'sd') {
   return [...new Set(candidates)];
 }
 
+const DIAGRAM_SAMPLE_WIDTH = 256;
+const DIAGRAM_MAX_COLORS = 64;
+const DIAGRAM_MIN_EDGE_RATIO = 0.01;
+const DIAGRAM_EDGE_THRESHOLD = 24;
+
 /**
- * PowerPoint/PDF/Word solo admiten PNG y JPEG. Cuando el CDN entrega WebP
- * (habitual en la variante de 2048 px), se convierte a JPEG para no perder
- * la diapositiva ni bajar de resolución.
+ * Heurística barata para distinguir diapositivas de texto/diagrama de fotos:
+ * se muestrea a 256 px, se cuentan colores cuantizados y bordes de contraste.
+ * Un fallo al decodificar nunca debe impedir la conversión a JPEG.
  */
-async function normalizeImageBuffer(buffer) {
-  const mime = detectImageMime(buffer);
-
-  if (mime === 'image/png' || mime === 'image/jpeg') {
-    return { buffer, mime };
-  }
-
-  if (!sharp) {
-    return { buffer, mime };
-  }
+async function looksLikeTextOrDiagram(buffer) {
+  if (!sharp || !Buffer.isBuffer(buffer)) return false;
 
   try {
-    const converted = await sharp(buffer).jpeg({ quality: 92 }).toBuffer();
+    const { data, info } = await sharp(buffer)
+      .resize({ width: DIAGRAM_SAMPLE_WIDTH, withoutEnlargement: true })
+      .toColourspace('srgb')
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, channels } = info;
+    if (!width || !height || channels < 3) return false;
+
+    const colors = new Set();
+    let edges = 0;
+    let comparisons = 0;
+
+    const luminanceAt = (index) =>
+      (data[index] * 299 + data[index + 1] * 587 + data[index + 2] * 114) / 1000;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = (y * width + x) * channels;
+        colors.add(
+          ((data[index] >> 4) << 8) | ((data[index + 1] >> 4) << 4) | (data[index + 2] >> 4)
+        );
+
+        const current = luminanceAt(index);
+
+        if (x + 1 < width) {
+          if (Math.abs(current - luminanceAt(index + channels)) >= DIAGRAM_EDGE_THRESHOLD) {
+            edges += 1;
+          }
+          comparisons += 1;
+        }
+
+        if (y + 1 < height) {
+          const below = ((y + 1) * width + x) * channels;
+          if (Math.abs(current - luminanceAt(below)) >= DIAGRAM_EDGE_THRESHOLD) {
+            edges += 1;
+          }
+          comparisons += 1;
+        }
+      }
+    }
+
+    if (colors.size > DIAGRAM_MAX_COLORS) return false;
+    return comparisons > 0 && edges / comparisons >= DIAGRAM_MIN_EDGE_RATIO;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * PowerPoint/PDF/Word solo admiten PNG y JPEG. Cuando el CDN entrega WebP
+ * (habitual en la variante de 2048 px), se convierte a PNG sin pérdida si el
+ * contenido parece texto/diagrama, o a JPEG con la calidad configurada.
+ * `options` permite ajustar la conversión sin depender de variables de entorno.
+ */
+async function normalizeImageBuffer(buffer, options = {}) {
+  const mime = detectImageMime(buffer);
+
+  if (mime === 'image/png' || mime === 'image/jpeg' || !sharp) {
+    return { buffer, mime };
+  }
+
+  const settings = options && typeof options === 'object' ? options : {};
+  const jpegQuality = resolveJpegQuality(settings.jpegQuality);
+  const conversion = resolveConversionMode(
+    settings.conversion === undefined ? WEBP_CONVERSION : settings.conversion,
+    WEBP_CONVERSION
+  );
+  const pngMaxBytes = resolvePngMaxBytes(settings.pngMaxBytes);
+
+  try {
+    if (mime === 'image/webp' && conversion !== 'jpeg') {
+      const usePng = conversion === 'png' || (await looksLikeTextOrDiagram(buffer));
+
+      if (usePng) {
+        const convertedPng = await sharp(buffer).png({ compressionLevel: 9 }).toBuffer();
+        if (convertedPng.length <= pngMaxBytes) {
+          return { buffer: convertedPng, mime: 'image/png' };
+        }
+      }
+    }
+
+    const converted = await sharp(buffer).jpeg({ quality: jpegQuality }).toBuffer();
     return { buffer: converted, mime: 'image/jpeg' };
   } catch (error) {
     return { buffer, mime };
@@ -1143,8 +1284,12 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
   try {
     let imageUrls = providedImages;
     let title = providedTitle || DEFAULT_TITLE;
+    let slideTexts = [];
+    const textWarnings = [];
 
-    if (!imageUrls.length) {
+    // En la exportación de texto, un título ya detectado evita repetir la
+    // inspección de la URL cuando el cliente no aportó imágenes.
+    if (!imageUrls.length && !(TEXT_FORMATS.includes(extension) && providedTitle)) {
       let info = null;
 
       const rendererConfigured = Boolean(process.env.RENDERER_URL);
@@ -1170,15 +1315,92 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
       }
 
       if (!info) {
-        throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
+        // Los formatos binarios necesitan imágenes; la exportación de texto
+        // puede continuar con los metadatos que ya tenía el cliente.
+        if (!TEXT_FORMATS.includes(extension)) {
+          throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
+        }
+        textWarnings.push('No se pudo inspeccionar la presentación; se exportaron los metadatos disponibles.');
+      } else {
+        imageUrls = selectSlideImages(info.imageUrls);
+        if (!TEXT_FORMATS.includes(extension) || !providedTitle) {
+          title = cleanSlideTitle(info.title) || DEFAULT_TITLE;
+        }
       }
-
-      imageUrls = selectSlideImages(info.imageUrls);
-      title = cleanSlideTitle(info.title) || DEFAULT_TITLE;
     }
 
-    if (!imageUrls.length) {
+    if (!imageUrls.length && !TEXT_FORMATS.includes(extension)) {
       throw createServiceError('No se encontraron imágenes válidas para convertir la presentación.', 422);
+    }
+
+    if (TEXT_FORMATS.includes(extension)) {
+      const warnings = [...textWarnings];
+      const ocrEnabled = process.env.OCR_ENABLED === 'true';
+      let source = 'metadata';
+
+      if (ocrEnabled && imageUrls.length) {
+        let engine = null;
+
+        try {
+          const cacheDir = String(process.env.OCR_CACHE_DIR || '').trim()
+            || path.join(DOWNLOADS_DIR, '.ocr-cache');
+
+          engine = createOcrEngine({
+            enabled: true,
+            lang: process.env.OCR_LANG,
+            maxSlides: process.env.OCR_MAX_SLIDES,
+            timeoutMs: process.env.OCR_TIMEOUT_MS,
+            cacheDir,
+            downloadImage,
+            quality: selectedQuality
+          });
+          slideTexts = await engine.recognizeSlides(imageUrls);
+
+          if (slideTexts.some((slide) => slide.text)) {
+            source = 'ocr';
+          }
+
+          for (const slide of slideTexts) {
+            if (slide.error) warnings.push(`Diapositiva ${slide.slide}: no se pudo reconocer el texto.`);
+          }
+        } catch (error) {
+          // No exponer detalles internos del motor en una cabecera pública.
+          warnings.push('OCR no disponible; se exportaron solo los metadatos.');
+        } finally {
+          if (engine) await engine.terminate().catch(() => {});
+        }
+      } else {
+        warnings.push(
+          ocrEnabled
+            ? 'No se encontraron imágenes para aplicar OCR; se exportaron solo los metadatos.'
+            : 'No se aplicó OCR; el texto procede de metadatos públicos.'
+        );
+      }
+
+      const textFile = await createTextExportFile({
+        title,
+        author: options.author || '',
+        sourceUrl: normalizedUrl,
+        slideCount: imageUrls.length,
+        slideTexts,
+        warnings,
+        format: extension,
+        source
+      }, jobDir, { sanitizeFileName, defaultTitle: DEFAULT_TITLE });
+
+      return {
+        success: true,
+        jobId,
+        title,
+        format: extension,
+        quality: selectedQuality,
+        source,
+        imageCount: imageUrls.length,
+        fileName: textFile.filename,
+        filePath: textFile.outputFile,
+        warnings,
+        downloadUrl: `/download/${jobId}/${textFile.filename}`
+      };
     }
 
     const result = await buildPresentationFileFromImages(imageUrls, extension, jobDir, title, selectedQuality);
@@ -1211,6 +1433,7 @@ module.exports = {
   MAX_SLIDES,
   MAX_IMAGE_BYTES,
   MAX_TOTAL_IMAGE_BYTES,
+  getLimits,
   normalizeSlideShareUrl,
   sanitizeFileName,
   cleanSlideTitle,
@@ -1229,6 +1452,8 @@ module.exports = {
   convertPptxToVariant,
   detectImageMime,
   toDataUri,
+  normalizeImageBuffer,
+  looksLikeTextOrDiagram,
   applyImageQuality,
   getImageCandidates,
   downloadImage,

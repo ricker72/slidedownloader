@@ -312,6 +312,125 @@ Además:
 Empieza directamente con la propuesta, sin explicar el proceso.`;
 }
 
+const GENERIC_TITLE_PATTERN = /^(?:sin t[ií]tulo|presentaci[oó]n(?: sin t[ií]tulo)?|introducci[oó]n(?:\s+(?:a|al|la|el|los|las))?|tema(?:\s+\d+)?)$/i;
+
+function capText(value, max) {
+  const text = normalizeWhitespace(value);
+  return text.length > max ? `${text.slice(0, Math.max(0, max - 1))}…` : text;
+}
+
+const SUMMARY_MAX_SLIDES = 30;
+const SUMMARY_MAX_CHARS = 4000;
+
+/** Fragmentos acotados antes de alimentar el resumen o enviarlos al servidor. */
+function normalizeSlideTexts(value) {
+  return (Array.isArray(value) ? value.slice(0, SUMMARY_MAX_SLIDES) : [])
+    .map((item) => capText(item && typeof item === 'object' ? item.text : item, SUMMARY_MAX_CHARS))
+    .filter(Boolean);
+}
+
+function firstSentence(value, max) {
+  const text = normalizeWhitespace(value);
+  if (!text) return '';
+
+  const match = text.match(/^[^.!?]+[.!?]?/);
+  return capText(match ? match[0] : text, max);
+}
+
+/**
+ * Resumen estructurado y determinista de la presentación.
+ *
+ * Es complementario al prompt: no llama a ningún servicio externo y solo usa
+ * metadatos y, cuando existen, los fragmentos de texto reconocido por OCR.
+ * Toda frase se devuelve como dato para que la interfaz la pinte con textContent.
+ */
+function buildStructuredSummary(input = {}) {
+  const analysis = input.analysis && typeof input.analysis === 'object' ? input.analysis : input;
+  const title = cleanTitle(analysis.title);
+  const description = normalizeWhitespace(analysis.description);
+  const author = capText(analysis.author, 120);
+  const slideCount = Math.max(0, Number.parseInt(analysis.slideCount, 10) || 0);
+  const slideTexts = normalizeSlideTexts(analysis.slideTexts);
+  const ocrSlides = slideTexts.filter((text) => text.length >= 20).length;
+
+  const keywords = Array.isArray(analysis.keywords) && analysis.keywords.length
+    ? analysis.keywords.slice(0, 10).map((word) => capText(word, 40)).filter(Boolean)
+    : extractKeywords({ title, description }, 6);
+
+  const hasTitle = Boolean(title) && !GENERIC_TITLE_PATTERN.test(title);
+  const hasDescription = Boolean(description);
+  const descriptionLead = firstSentence(description, 240);
+  const topic = hasTitle
+    ? title
+    : (descriptionLead || keywords.slice(0, 3).join(' y ') || 'Tema no determinado');
+
+  let topicConfidence = 'baja';
+  if (hasTitle && hasDescription) topicConfidence = 'alta';
+  else if (hasTitle || (descriptionLead && keywords.length >= 2)) topicConfidence = 'media';
+  if (ocrSlides >= 2) topicConfidence = 'alta';
+
+  const overviewParts = [
+    `La presentación «${topic}»${author ? `, de ${author}` : ''}${
+      slideCount ? `, reúne ${slideCount} diapositivas` : ', no tiene un número de diapositivas confirmado'
+    }.`,
+    hasDescription ? descriptionLead : 'No hay una descripción pública disponible.'
+  ];
+
+  if (ocrSlides) {
+    overviewParts.push(`Se analizó el texto reconocido en ${ocrSlides} diapositivas.`);
+  }
+
+  const keyPoints = keywords.slice(0, 4).map((word) => `Concepto destacado: ${word}.`);
+
+  for (const [index, text] of slideTexts.entries()) {
+    if (keyPoints.length >= 6) break;
+    if (text.length < 20) continue;
+    keyPoints.push(`Diapositiva ${index + 1}: ${capText(firstSentence(text, 180), 180)}.`);
+  }
+
+  if (!keyPoints.length) {
+    keyPoints.push('No hay puntos clave suficientes en los metadatos disponibles.');
+  }
+
+  const suggestedOutline = [
+    `Introducción: contexto y relevancia de ${topic}.`,
+    'Desarrollo: ideas principales, ejemplos y evidencias del material disponible.',
+    'Síntesis: conclusiones y siguientes pasos.'
+  ];
+
+  const limitations = [];
+
+  if (!hasDescription) {
+    limitations.push('No hay descripción pública: el tema se infiere del título y las palabras clave.');
+  }
+  if (!slideCount) {
+    limitations.push('No se determinó el número de diapositivas.');
+  }
+  if (!ocrSlides) {
+    limitations.push('No se dispone del texto de las diapositivas; el resumen se basa en metadatos.');
+  }
+  if (analysis.challengeDetected) {
+    limitations.push('SlideShare mostró una verificación: parte de los metadatos puede estar incompleta.');
+  }
+
+  return {
+    topic,
+    topicConfidence,
+    overview: overviewParts.join(' '),
+    keyPoints,
+    suggestedOutline,
+    evidence: {
+      title: hasTitle,
+      description: hasDescription,
+      author: Boolean(author),
+      slideCount,
+      ocrSlides
+    },
+    limitations,
+    source: ocrSlides ? 'metadata+ocr' : 'metadata'
+  };
+}
+
 module.exports = {
   LANGUAGE_NAMES,
   GOALS,
@@ -322,6 +441,8 @@ module.exports = {
   cleanTitle,
   clampSlides,
   buildAnalysis,
+  buildStructuredSummary,
+  normalizeSlideTexts,
   normalizeOptions,
   buildPresentationPrompt
 };

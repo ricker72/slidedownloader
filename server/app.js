@@ -3,8 +3,13 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { downloadPresentation, normalizeSlideShareUrl, SUPPORTED_FORMATS, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality } = require('../services/slideshareService');
-const { buildPresentationPrompt, buildAnalysis } = require('../services/promptService');
+const { normalizeSlideShareUrl, extractPresentationInfoLite, extractPresentationInfoViaRenderer, selectSlideImages, cleanSlideTitle, applyImageQuality, getLimits } = require('../services/slideshareService');
+const {
+  buildPresentationPrompt,
+  buildAnalysis,
+  buildStructuredSummary,
+  normalizeSlideTexts
+} = require('../services/promptService');
 const { getGoogleCseId } = require('../services/presentationSearch');
 const {
   apiLimiter,
@@ -19,6 +24,10 @@ const { securityHeaders } = require('../middleware/securityHeaders');
 const { sendGeneratedFile, MIME_BY_EXTENSION } = require('../utils/fileResponse');
 const { isValidJobId, cleanupJobDir } = require('../utils/downloadJob');
 const { openPublicResponse, isBlockedHostname } = require('../utils/publicNetwork');
+const { generateDownload } = require('../services/downloadService');
+const { MemoryJobStore } = require('../services/jobStore');
+const { MemoryArtifactStore } = require('../services/artifactStore');
+const { createJobsRouter } = require('../api/jobs');
 const scribdRouter = require('../api/scribd');
 
 const app = express();
@@ -27,6 +36,21 @@ const PORT = process.env.PORT || 8080;
 // En Vercel el sistema de archivos es de solo lectura excepto /tmp.
 // En local usamos la carpeta del proyecto.
 const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+// Los trabajos asíncronos son opt-in: sin JOBS_ENABLED=true el contrato
+// público sigue siendo exclusivamente el de /api/download.
+const jobsEnabled = process.env.JOBS_ENABLED === 'true';
+// El worker solo existe en el proceso principal. En Vercel (`api/index.js`
+// hace require de esta app) no hay worker ni stores compartidos, así que la
+// UI no debe ofrecer el modo asíncrono aunque la variable esté activa.
+const jobsRunnable = jobsEnabled && require.main === module;
+
+if (jobsEnabled && !jobsRunnable) {
+  console.warn(
+    '[SlideDownloader] JOBS_ENABLED=true pero no hay worker en este proceso: '
+    + 'los endpoints de jobs permanecen desactivados.'
+  );
+}
 
 // Resolver public/ de forma robusta (local y Vercel serverless)
 const candidatePublicDirs = [
@@ -191,7 +215,10 @@ app.use(helmet({
   },
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
-app.use(morgan('combined'));
+// Los tokens de los trabajos viajan en la query string por compatibilidad;
+// nunca deben acabar en los logs de acceso.
+morgan.token('safe-url', (req) => String(req.originalUrl || '').replace(/([?&]token=)[^&]+/gi, '$1[REDACTED]'));
+app.use(morgan(':remote-addr - :remote-user [:date[clf]] ":method :safe-url" :status :res[content-length] ":referrer" ":user-agent"'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(publicDir, {
   maxAge: '1h',
@@ -414,6 +441,22 @@ app.post('/api/ping', pingLimiter, async (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Límites vigentes del servidor para que la UI los muestre antes de descargar.
+// Se calculan en cada respuesta: una instancia con otra configuración no debe
+// heredar los valores cacheados de otra.
+function getPublicLimits() {
+  return {
+    ...getLimits(),
+    jobsEnabled: jobsRunnable,
+    textFormats: ['txt', 'md'],
+    ocrEnabled: process.env.OCR_ENABLED === 'true'
+  };
+}
+
+app.get('/api/limits', pingLimiter, (req, res) => {
+  res.json({ success: true, ...getPublicLimits() });
+});
+
 app.post('/api/inspect', inspectLimiter, async (req, res) => {
   try {
     const { url } = req.body || {};
@@ -425,7 +468,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
 
     const cachedInspection = getCachedInspection(slideUrl);
     if (cachedInspection) {
-      return res.json({ ...cachedInspection, cached: true });
+      return res.json({ ...cachedInspection, cached: true, limits: getPublicLimits() });
     }
 
     let info = null;
@@ -463,8 +506,13 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
       });
     }
 
+    // Diapositivas candidatas antes de recortar, sin contar miniaturas ni
+    // imágenes ajenas: la UI avisa solo si se descartarán diapositivas reales.
+    const allSlideImages = selectSlideImages(info.imageUrls, Number.POSITIVE_INFINITY);
+    const detectedSlideCount = allSlideImages.length;
+
     // Solo diapositivas de esta presentación, en orden y sin duplicados.
-    const slideImages = selectSlideImages(info.imageUrls);
+    const slideImages = allSlideImages.slice(0, getLimits().maxSlides);
 
     // La vista previa usa la variante de 638 px (más nítida que el thumbnail
     // de 320); el frontend reintenta con 320 si esa variante no existe.
@@ -488,6 +536,8 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
       description: analysis.description,
       author: analysis.author,
       slideCount: analysis.slideCount,
+      detectedSlideCount,
+      limits: getPublicLimits(),
       keywords: analysis.keywords,
       previewImages,
       galleryImages: previewImages,
@@ -558,13 +608,19 @@ app.post('/api/prompt', promptLimiter, async (req, res) => {
       }
     }
 
+    // Texto de diapositivas opcional: se acota en un único lugar para que un
+    // cuerpo grande no pueda inflar el resumen ni divergir de la heurística.
+    const slideTexts = normalizeSlideTexts(analysisInput.slideTexts);
+
     const prompt = buildPresentationPrompt({ analysis: analysisInput, options: options || {} });
     const result = buildAnalysis(analysisInput);
+    const summary = buildStructuredSummary({ ...analysisInput, slideTexts });
 
     return res.json({
       success: true,
       prompt,
       analysis: result,
+      summary,
       characterCount: prompt.length
     });
   } catch (error) {
@@ -583,35 +639,7 @@ app.post('/api/prompt', promptLimiter, async (req, res) => {
 
 app.post('/api/download', downloadLimiter, async (req, res) => {
   try {
-    const { url, format, quality, imageUrls, title } = req.body || {};
-
-    if (!url) {
-      return res.status(400).json({ success: false, error: 'Se requiere una URL' });
-    }
-
-    const normalizedUrl = normalizeSlideShareUrl(url);
-    if (!normalizedUrl) {
-      return res.status(400).json({ success: false, error: 'URL inválida de SlideShare' });
-    }
-
-    const selectedFormat = String(format || 'pdf').toLowerCase();
-    if (!SUPPORTED_FORMATS.includes(selectedFormat)) {
-      return res.status(400).json({
-        success: false,
-        error: `Formato no soportado. Formatos disponibles: ${SUPPORTED_FORMATS.join(', ')}`
-      });
-    }
-
-    const selectedQuality = String(quality || 'sd').toLowerCase();
-    if (!['sd', 'hd'].includes(selectedQuality)) {
-      return res.status(400).json({ success: false, error: 'Calidad no soportada. Opciones: sd, hd' });
-    }
-
-    const cachedInspection = getCachedInspection(normalizedUrl);
-    const result = await downloadPresentation(normalizedUrl, selectedFormat, selectedQuality, {
-      imageUrls: Array.isArray(imageUrls) && imageUrls.length ? imageUrls : cachedInspection?.previewImages,
-      title: title || cachedInspection?.title
-    });
+    const result = await generateDownload(req.body, { getCachedInspection });
 
     // El archivo se envía en esta misma respuesta. Devolver una URL
     // `/download/{jobId}/...` fallaba en Vercel cuando la siguiente petición
@@ -624,6 +652,7 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
       quality: result.quality,
       slideCount: result.imageCount,
       source: result.source,
+      warnings: result.warnings,
       onCleanup: () => cleanupJobDir(result.filePath)
     });
   } catch (error) {
@@ -679,6 +708,10 @@ app.get('/download/:jobId/:filename', (req, res) => {
 
 app.use('/api/scribd', scribdRouter);
 
+const jobStore = new MemoryJobStore();
+const artifactStore = new MemoryArtifactStore();
+app.use(createJobsRouter({ jobStore, artifactStore, isEnabled: jobsRunnable }));
+
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ success: false, error: 'Endpoint no encontrado' });
@@ -691,6 +724,52 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
   });
+
+  // En local el worker vive en el mismo proceso y comparte los stores en
+  // memoria. Un guardia `inFlight` evita que dos ticks generen a la vez.
+  if (jobsRunnable) {
+    const { processNextJob, sweepExpired } = require('../services/jobWorker');
+    const { DEFAULT_MAX_ATTEMPTS } = require('../services/jobStore');
+    const configuredAttempts = Number(process.env.MAX_JOB_ATTEMPTS);
+    const maxAttempts = Number.isFinite(configuredAttempts) && configuredAttempts > 0
+      ? Math.floor(configuredAttempts)
+      : DEFAULT_MAX_ATTEMPTS;
+
+    let inFlight = false;
+    let lastStaleScanAt = 0;
+    let lastSweepAt = Date.now();
+
+    const workerTimer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
+
+      try {
+        const result = await processNextJob({
+          jobStore,
+          artifactStore,
+          maxAttempts,
+          lastStaleScanAt
+        });
+        if (result.staleScanned) lastStaleScanAt = Date.now();
+        if (result.processed) {
+          console.log(`[jobs] ${result.jobId}: ${result.status}`);
+        }
+      } catch (error) {
+        console.error('[jobs] Error en el worker:', error.message);
+      } finally {
+        inFlight = false;
+      }
+
+      // La limpieza es poco frecuente: evita recorrer los stores cada segundo.
+      if (Date.now() - lastSweepAt >= 60_000) {
+        lastSweepAt = Date.now();
+        sweepExpired({ jobStore, artifactStore }).catch((error) => {
+          console.error('[jobs] Error al limpiar caducados:', error.message);
+        });
+      }
+    }, 1000);
+    workerTimer.unref();
+  }
 }
 
 module.exports = app;

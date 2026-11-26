@@ -19,6 +19,19 @@ const promptContainer = document.getElementById('ai-prompt-container');
 const promptOutput = document.getElementById('prompt-output');
 const promptChars = document.getElementById('prompt-chars');
 
+const summaryContainer = document.getElementById('ai-summary-container');
+const summaryTopic = document.getElementById('summary-topic');
+const summaryOverview = document.getElementById('summary-overview');
+const summaryConfidence = document.getElementById('summary-confidence');
+const summaryPoints = document.getElementById('summary-points');
+const summaryOutline = document.getElementById('summary-outline');
+const summaryLimitations = document.getElementById('summary-limitations');
+const summaryOutput = document.getElementById('summary-output');
+const summaryCopyBtn = document.getElementById('summary-copy');
+const summaryCopyLabel = document.getElementById('summary-copy-label');
+
+const CONFIDENCE_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+
 const statTitle = document.getElementById('stat-title');
 const statSlides = document.getElementById('stat-slides');
 const statAuthor = document.getElementById('stat-author');
@@ -290,8 +303,86 @@ urlInput.addEventListener('input', () => {
     resultPanel.hidden = true;
     optionsPanel.hidden = true;
     promptContainer.hidden = true;
+    summaryContainer.hidden = true;
     document.getElementById('ai-manual-entry').hidden = true;
     showStatus(document.getElementById('ai-status'), 'info', 'Enlace modificado. Analízalo para generar un prompt con sus datos.');
+  }
+});
+
+/* ============================================================
+   Resumen estructurado
+   ============================================================ */
+
+function fillSummaryList(container, values) {
+  container.textContent = '';
+
+  const items = Array.isArray(values) ? values : [];
+  if (!items.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'Sin datos disponibles.';
+    container.appendChild(empty);
+    return;
+  }
+
+  for (const value of items) {
+    const item = document.createElement('li');
+    item.textContent = String(value);
+    container.appendChild(item);
+  }
+}
+
+function renderSummary(summary) {
+  if (!summary) {
+    summaryContainer.hidden = true;
+    return;
+  }
+
+  const topic = String(summary.topic || 'Tema no determinado');
+  const confidence = CONFIDENCE_LABELS[summary.topicConfidence] || 'Baja';
+  const points = Array.isArray(summary.keyPoints) ? summary.keyPoints : [];
+  const outline = Array.isArray(summary.suggestedOutline) ? summary.suggestedOutline : [];
+  const limitations = Array.isArray(summary.limitations) ? summary.limitations : [];
+
+  summaryTopic.textContent = topic;
+  summaryOverview.textContent = String(summary.overview || '');
+  summaryConfidence.textContent = `Confianza: ${confidence}`;
+  fillSummaryList(summaryPoints, points);
+  fillSummaryList(summaryOutline, outline);
+  fillSummaryList(summaryLimitations, limitations);
+
+  const lines = [
+    `Tema principal: ${topic}`,
+    `Confianza: ${confidence}`,
+    '',
+    String(summary.overview || ''),
+    '',
+    'Puntos clave',
+    ...points.map((point) => `- ${String(point)}`),
+    '',
+    'Estructura sugerida',
+    ...outline.map((item) => `- ${String(item)}`)
+  ];
+
+  if (limitations.length) {
+    lines.push('', 'Limitaciones', ...limitations.map((item) => `- ${String(item)}`));
+  }
+
+  summaryOutput.textContent = lines.join('\n').trim();
+  summaryContainer.hidden = false;
+}
+
+summaryCopyBtn.addEventListener('click', async () => {
+  const text = summaryOutput.textContent;
+  if (!text) return;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    summaryCopyLabel.textContent = '¡Copiado!';
+    setTimeout(() => {
+      summaryCopyLabel.textContent = 'Copiar resumen';
+    }, 1800);
+  } catch (error) {
+    showStatus(document.getElementById('ai-status'), 'error', 'No se pudo copiar el resumen');
   }
 });
 
@@ -361,8 +452,9 @@ async function handleGeneratePrompt() {
     promptOutput.textContent = data.prompt;
     promptChars.textContent = `${data.characterCount.toLocaleString()} caracteres`;
     promptContainer.hidden = false;
+    renderSummary(data.summary);
 
-    showStatus(document.getElementById('ai-status'), 'success', 'Prompt listo para copiar.');
+    showStatus(document.getElementById('ai-status'), 'success', 'Prompt y resumen listos para copiar.');
   } catch (error) {
     showStatus(document.getElementById('ai-status'), 'error', error.message || 'Error generando el prompt');
     console.error('Prompt error:', error);

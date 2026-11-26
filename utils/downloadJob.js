@@ -31,8 +31,25 @@ function cleanupJobDir(filePath) {
   }
 }
 
+/**
+ * Versión asíncrona para el worker: evitar pausas del event loop al borrar
+ * directorios con cientos de diapositivas.
+ */
+async function cleanupJobDirAsync(filePath) {
+  const jobDir = path.dirname(String(filePath || ''));
+
+  if (!isValidJobId(path.basename(jobDir))) return;
+
+  try {
+    await fs.promises.rm(jobDir, { recursive: true, force: true });
+  } catch (error) {
+    console.warn('No se pudo limpiar el directorio del trabajo:', error.message);
+  }
+}
+
 module.exports = {
   JOB_ID_RE,
   isValidJobId,
-  cleanupJobDir
+  cleanupJobDir,
+  cleanupJobDirAsync
 };

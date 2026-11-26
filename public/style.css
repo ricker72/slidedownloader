@@ -1158,6 +1158,55 @@ main {
 }
 
 /* ============================================================
+   Límites de conversión
+   ============================================================ */
+
+.limits-section[hidden],
+.limits-warning[hidden],
+.limits-warning:empty {
+  display: none;
+}
+
+.limits-section {
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.limits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 18px;
+  margin: 0;
+}
+
+.limits-grid dt {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.limits-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.limits-warning {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: var(--radius-md);
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ============================================================
    Vista previa
    ============================================================ */
 
@@ -1295,6 +1344,17 @@ main {
   height: 20px;
 }
 
+.btn-secondary {
+  color: var(--brand-dark);
+  background: var(--surface);
+  border-color: #bfdbfe;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #eff6ff;
+  transform: translateY(-2px);
+}
+
 /* ============================================================
    Acción y estado
    ============================================================ */
@@ -1319,6 +1379,47 @@ main {
   width: 14px;
   height: 14px;
   color: #10b981;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.job-progress {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: center;
+}
+
+.job-controls[hidden],
+.job-progress:empty {
+  display: none;
+}
+
+.job-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.job-cancel {
+  border: 0;
+  background: none;
+  color: var(--brand-dark);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.job-cancel:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .status-section {
@@ -2017,6 +2118,63 @@ main {
   display: flex;
   gap: 10px;
   margin-top: 14px;
+}
+
+/* Resumen estructurado del asistente */
+.summary-panel {
+  margin-top: 22px;
+  padding: 18px 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.summary-panel[hidden] {
+  display: none;
+}
+
+.summary-topic {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.summary-overview {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.summary-section h4 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.summary-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.summary-list:empty {
+  display: none;
+}
+
+#summary-output {
+  margin: 14px 0 0;
 }
 
 .btn-loading .icon {

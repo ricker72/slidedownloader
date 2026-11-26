@@ -1,0 +1,91 @@
+/**
+ * Validación y generación de descargas, compartidas por el endpoint
+ * sincrónico y (si se habilita) por el worker de trabajos en background.
+ *
+ * No envía archivos ni escribe respuestas HTTP: solo valida la petición y
+ * delega en `downloadPresentation`. Así el contrato de `/api/download`
+ * sigue siendo exactamente el mismo que antes de extraer esta lógica.
+ */
+
+const {
+  downloadPresentation,
+  normalizeSlideShareUrl,
+  SUPPORTED_FORMATS
+} = require('./slideshareService');
+
+const DOWNLOAD_QUALITIES = ['sd', 'hd'];
+
+class DownloadValidationError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = 'DownloadValidationError';
+    this.status = status;
+  }
+}
+
+/**
+ * Valida y normaliza el cuerpo de una petición de descarga.
+ * Lanza `DownloadValidationError` con los mismos mensajes y códigos que
+ * usaba anteriormente el controlador de `/api/download`.
+ */
+function validateDownloadRequest(body) {
+  const { url, format, quality, imageUrls, title } = body || {};
+
+  if (!url) {
+    throw new DownloadValidationError('Se requiere una URL');
+  }
+
+  const normalizedUrl = normalizeSlideShareUrl(url);
+  if (!normalizedUrl) {
+    throw new DownloadValidationError('URL inválida de SlideShare');
+  }
+
+  const selectedFormat = String(format || 'pdf').toLowerCase();
+  if (!SUPPORTED_FORMATS.includes(selectedFormat)) {
+    throw new DownloadValidationError(
+      `Formato no soportado. Formatos disponibles: ${SUPPORTED_FORMATS.join(', ')}`
+    );
+  }
+
+  const selectedQuality = String(quality || 'sd').toLowerCase();
+  if (!DOWNLOAD_QUALITIES.includes(selectedQuality)) {
+    throw new DownloadValidationError('Calidad no soportada. Opciones: sd, hd');
+  }
+
+  return {
+    url: normalizedUrl,
+    format: selectedFormat,
+    quality: selectedQuality,
+    imageUrls,
+    title
+  };
+}
+
+/**
+ * Genera el archivo de la presentación.
+ *
+ * `options.getCachedInspection` permite reutilizar la vista previa ya
+ * calculada por `/api/inspect`. El worker de background no la tiene y usa
+ * un getter por defecto que devuelve `null`.
+ */
+async function generateDownload(body, options = {}) {
+  const request = validateDownloadRequest(body);
+  const getCachedInspection = options.getCachedInspection || (() => null);
+  const generate = options.generate || downloadPresentation;
+
+  const cachedInspection = getCachedInspection(request.url) || null;
+
+  return generate(request.url, request.format, request.quality, {
+    imageUrls: Array.isArray(request.imageUrls) && request.imageUrls.length
+      ? request.imageUrls
+      : cachedInspection?.previewImages,
+    title: request.title || cachedInspection?.title
+  });
+}
+
+module.exports = {
+  DownloadValidationError,
+  DOWNLOAD_QUALITIES,
+  validateDownloadRequest,
+  generateDownload
+};

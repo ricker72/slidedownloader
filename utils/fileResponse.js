@@ -19,7 +19,9 @@ const MIME_BY_EXTENSION = {
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   '.ppsx': 'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
   '.potx': 'application/vnd.openxmlformats-officedocument.presentationml.template',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8'
 };
 
 function encodeHeader(value) {

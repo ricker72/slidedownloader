@@ -29,7 +29,7 @@
 
 ## 📖 Sobre el Proyecto
 
-**SlideDownloader** es una aplicación web profesional diseñada para descargar presentaciones de **SlideShare** en múltiples formatos de salida: **PPTX**, **PPSX**, **POTX** (PowerPoint), **PDF** y **DOCX** (Word).
+**SlideDownloader** es una aplicación web profesional diseñada para descargar presentaciones de **SlideShare** en múltiples formatos de salida: **PPTX**, **PPSX**, **POTX** (PowerPoint), **PDF**, **DOCX** (Word) y **TXT/MD** (solo texto).
 
 ### 🎯 Enfoque del Proyecto
 
@@ -38,7 +38,8 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 - 📥 **Descargar** presentaciones públicas de SlideShare en el formato que necesiten
 - 👁️ **Vista previa** de las diapositivas antes de descargar
 - 🔄 **Seleccionar calidad** de imagen (SD estándar / HD alta resolución)
-- 🤖 **Asistente de IA**: generar un prompt profesional listo para copiar y pegar en cualquier IA (ChatGPT, Claude, Gemini, etc.) y recrear la presentación con una identidad visual nueva, imágenes propias, temas claros y buena tipografía
+- 🤖 **Asistente de IA**: generar un prompt profesional listo para copiar y pegar en cualquier IA (ChatGPT, Claude, Gemini, etc.) y recrear la presentación con una identidad visual nueva, imágenes propias, temas claros y buena tipografía, además de un **resumen estructurado con el tema principal**
+- 📝 **Exportación de texto**: descargar solo el contenido en TXT o Markdown para estudiar o alimentar otras IAs, con OCR opcional
 - 📱 **Interfaz responsiva** que funciona en móviles, tablets y escritorio
 
 ---
@@ -47,10 +48,11 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 
 | Característica | Descripción | Estado |
 |:---|:---|:---:|
-| 📥 **Múltiples formatos** | PPTX, PPSX, POTX, PDF y DOCX | ✅ Disponible |
+| 📥 **Múltiples formatos** | PPTX, PPSX, POTX, PDF, DOCX, TXT y MD | ✅ Disponible |
 | 👁️ **Vista previa** | Grid de miniaturas antes de descargar | ✅ Disponible |
 | 🔄 **Calidad HD/SD** | Selector de resolución de imagen | ✅ Disponible |
-| 🤖 **Asistente IA** | Genera prompts profesionales para recrear presentaciones | ✅ Disponible |
+| 🤖 **Asistente IA** | Genera prompts profesionales y un resumen estructurado con el tema principal | ✅ Disponible |
+| 📝 **Solo texto** | Exporta TXT/Markdown con OCR opcional para estudiar o alimentar IAs | ✅ Disponible (OCR opt-in) |
 | 📄 **Documentos de Scribd** | Descarga documentos públicos en PDF, PPTX, PPSX, POTX y DOCX | ✅ Disponible |
 | 🌐 **Detección automática** | Analiza la URL al pegarla en el input | ✅ Disponible |
 | 📱 **Responsive** | Adaptado a móvil, tablet y desktop | ✅ Disponible |
@@ -166,7 +168,56 @@ Para no agotar la memoria ni el tiempo de ejecución (especialmente en Vercel), 
 - **Tiempo de descarga de imágenes**: 5 minutos en local y **35 s en serverless** (`MAX_DOWNLOAD_MS`). Si se agota, responde `504`.
 - **Concurrencia de descarga**: 10 en local y 8 en serverless (`IMAGE_CONCURRENCY`).
 
+### Límites visibles en la interfaz
+
+La página principal muestra los límites vigentes **antes** de pulsar «Descargar presentación»: máximo de diapositivas, diapositivas detectadas, tamaño estimado, tope por imagen, tope total y tiempo máximo. Si la presentación supera un tope, se muestra un aviso.
+
+- `GET /api/limits` devuelve esos valores (y los de conversión WebP) desde la configuración real del servidor.
+- `POST /api/inspect` también los incluye en `limits`, junto con `detectedSlideCount` (diapositivas antes del recorte) y `slideCount` (las que se descargarán).
+- `ESTIMATED_BYTES_PER_SLIDE_SD` (120 KB) y `ESTIMATED_BYTES_PER_SLIDE_HD` (450 KB) configuran la estimación. Es orientativa: se muestra con `~` y no es una medida del archivo final.
+
+### Conversión de WebP
+
+SlideShare publica la variante HD como WebP, que PDF, PowerPoint y Word no admiten de forma fiable. Se convierte así:
+
+- `WEBP_CONVERSION=auto` (por defecto): las diapositivas con aspecto de texto o diagrama pasan a **PNG sin pérdida** (mejor nitidez); el resto, a JPEG.
+- `WEBP_CONVERSION=jpeg`: fuerza JPEG para todas, como antes.
+- `WEBP_CONVERSION=png`: fuerza PNG para todas.
+- `JPEG_QUALITY`: calidad del JPEG resultante, de **1 a 100** (por defecto, **92**).
+- `WEBP_PNG_MAX_BYTES`: tope del PNG generado (8 MB por defecto). Si se excede, se usa JPEG para no agotar el presupuesto de la función.
+
 Las imágenes se insertan en PPTX y DOCX conservando su proporción real (con bandas blancas si hace falta), sin estirarlas.
+
+## 📝 Exportación de texto y resumen del asistente
+
+Los formatos `txt` y `md` se añaden a `/api/download` sin cambiar su contrato: el archivo se envía en la misma respuesta con las cabeceras `X-Download-*` habituales (incluida `X-Download-Warnings` cuando hay avisos).
+
+- **Sin OCR (por defecto)**: el archivo contiene título, autor, fuente, número de diapositivas y una sección de limitaciones que deja claro que **no es una transcripción**. Es útil como ficha de estudio y para alimentar IAs con metadatos fiables.
+- **Con OCR**: `OCR_ENABLED=true` activa `tesseract.js` sobre las imágenes de las diapositivas. La primera ejecución descarga el modelo de idioma y lo guarda en caché. Controles:
+  - `OCR_LANG`: código de Tesseract (por defecto `eng`; usa `spa` para español).
+  - `OCR_MAX_SLIDES`: máximo de diapositivas procesadas (por defecto 10, tope 50).
+  - `OCR_TIMEOUT_MS`: timeout por diapositiva (por defecto 20 000 ms).
+  - `OCR_CACHE_DIR`: directorio de caché del modelo (por defecto `downloads/.ocr-cache`).
+- El OCR es secuencial y costoso en CPU. En Vercel conviene dejarlo desactivado y, si se necesita, encolar la descarga con el modo asíncrono descrito abajo. Los fallos parciales se anotan en el archivo y en `X-Download-Warnings`; el texto reconocido se trata siempre como dato, nunca como instrucciones.
+- `GET /api/limits` informa de forma aditiva `textFormats: ['txt','md']` y `ocrEnabled`.
+
+El asistente (`/ai`) añade un panel de **resumen estructurado** junto al prompt: tema principal con nivel de confianza, vista general, puntos clave, estructura sugerida y limitaciones. `POST /api/prompt` devuelve el campo aditivo `summary` y acepta opcionalmente `analysis.slideTexts` (máximo 30 fragmentos de 4000 caracteres) para enriquecer el resumen. El resumen se calcula con heurísticas locales: no llama a servicios externos ni modifica el prompt existente.
+
+## ⏳ Trabajos en segundo plano (experimental)
+
+`POST /api/download` sigue generando y enviando el archivo **en la misma petición**. Ese es el comportamiento por defecto y no cambia. Opcionalmente se puede habilitar un modo asíncrono:
+
+- `JOBS_ENABLED=true` activa `POST /api/jobs`, `GET /api/jobs/:id` y la ruta del artefacto. Sin esta variable (o sin worker en el proceso), responden `404`.
+- `POST /api/jobs` acepta el mismo cuerpo que `/api/download` y responde `202` con `jobId` y `pollUrl`. La URL de sondeo incluye un **token de posesión**: guárdala, no es suficiente con el UUID. La cola acepta hasta 50 trabajos pendientes (`MAX_JOB_QUEUE`); al llenarse responde `503`.
+- `GET /api/jobs/:id?token=...` devuelve `status` (`queued`, `running`, `done`, `failed`), `progress` y, cuando termina, `result.downloadUrl`. Incluye `pollAfterMs` (2 s): la UI lo respeta en lugar de sondear cada segundo.
+- `GET /api/jobs/:id/artifact/:filename?token=...` sirve el archivo generado con `Cache-Control: no-store`. El token puede ir en la query (compatibilidad) o, preferiblemente, en `Authorization: Bearer <token>` / `X-Job-Token` para que no quede en logs ni en el historial. Los logs redactan `token=` de la URL.
+- Son dos capabilities distintas: el token de sondeo **no** sirve para descargar el artefacto, que usa el suyo propio. Una URL caducada responde `410`.
+
+El worker reutiliza la misma lógica de descarga, sube el resultado al almacén de artefactos y limpia el directorio temporal mediante E/S asíncrona. Procesa **un trabajo a la vez** para no solapar generaciones. Reintenta fallos transitorios con backoff (`MAX_JOB_ATTEMPTS`, por defecto 2); los errores de validación (4xx) fallan de inmediato. Los trabajos abandonados se recuperan sin consumir un intento. Cada minuto se barren los caducados: trabajos a las 24 h (`JOB_TTL_MS`), artefactos a la 1 h y enlaces de descarga a los 15 min.
+
+**Estado de la implementación:** los stores son en memoria. El worker solo se crea dentro de `node server/app.js` (`require.main === module`), por lo que el modo asíncrono funciona **solo en local/instancia única**. En Vercel, `api/index.js` importa la app sin worker y las invocaciones no comparten memoria: aunque se configure `JOBS_ENABLED`, los endpoints siguen desactivados y `/api/limits` informa `jobsEnabled: false`. Para habilitarlo allí hacen falta tres cosas: adaptadores compartidos (Redis para trabajos, Blob/S3 para artefactos) que implementen los contratos de `services/jobStore.js` y `services/artifactStore.js`, un proceso worker independiente, y una cola durable. La URL de descarga siempre será una ruta de esta API, así que los adaptadores solo gestionan bytes (`put`/`get`/`getContentType`/`delete`/`deleteExpired`). Por todo eso la variable está desactivada por defecto.
+
+El handler de Vercel usa `maxDuration: 300` (Fluid Compute, plan Hobby) en lugar de los 60 s anteriores. Esto amplía el presupuesto de la descarga sincrónica; no sustituye a una cola durable.
 
 ## 💻 Lenguaje de Programación
 

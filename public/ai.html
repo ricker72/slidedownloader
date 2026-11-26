@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asistente de Presentaciones IA — SlideDownloader</title>
   <meta name="description" content="Analiza una presentación de SlideShare y genera un prompt profesional para crear una nueva presentación o documento con tu IA preferida.">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body class="page-no-banner">
@@ -340,6 +340,38 @@
             </div>
           </div>
 
+          <div id="ai-summary-container" class="summary-panel" hidden>
+            <div class="prompt-header">
+              <h3>Resumen estructurado</h3>
+              <span class="prompt-badge" id="summary-confidence">—</span>
+            </div>
+            <p class="summary-topic" id="summary-topic">—</p>
+            <p class="summary-overview" id="summary-overview" aria-live="polite"></p>
+
+            <div class="summary-grid">
+              <section class="summary-section">
+                <h4>Puntos clave</h4>
+                <ul id="summary-points" class="summary-list"></ul>
+              </section>
+              <section class="summary-section">
+                <h4>Estructura sugerida</h4>
+                <ul id="summary-outline" class="summary-list"></ul>
+              </section>
+              <section class="summary-section">
+                <h4>Limitaciones</h4>
+                <ul id="summary-limitations" class="summary-list"></ul>
+              </section>
+            </div>
+
+            <pre id="summary-output" hidden></pre>
+            <div class="prompt-actions">
+              <button id="summary-copy" class="btn btn-soft" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>
+                <span id="summary-copy-label">Copiar resumen</span>
+              </button>
+            </div>
+          </div>
+
           <div id="ai-prompt-container" class="prompt-container" hidden>
             <div class="prompt-header">
               <h3>Prompt generado</h3>
@@ -410,6 +442,6 @@
     </div>
   </footer>
 
-  <script src="ai.js?v=2"></script>
+  <script src="ai.js?v=3"></script>
 </body>
 </html>

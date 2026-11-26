@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SlideDownloader - Descargador de Presentaciones</title>
   <meta name="description" content="Descarga presentaciones de SlideShare en PDF, PowerPoint (PPTX, PPSX, POTX) y Word (DOCX) con vista previa y calidad HD.">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='22' height='100' width='100'/><path d='M50 22v34m0 0 12-12m-12 12-12-12M28 72h44' stroke='white' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body class="page-home">
@@ -50,6 +50,12 @@
       <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
       <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
       <text x="15.6" y="25" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#fff">W</text>
+    </symbol>
+
+    <symbol id="i-txt" viewBox="0 0 32 32">
+      <path d="M7 2.5h11.5L25 9v19.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M18.5 2.5V9H25" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M11 13.5h10M11 18h10M11 22.5h6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
     </symbol>
 
     <symbol id="i-link" viewBox="0 0 24 24">
@@ -157,7 +163,7 @@
           </div>
           <span class="card-chip">
             <span class="card-chip-dot" aria-hidden="true"></span>
-            5 formatos disponibles
+            7 formatos disponibles
           </span>
         </div>
 
@@ -288,6 +294,28 @@
               </span>
             </label>
 
+            <label class="format-option">
+              <input type="radio" name="format" value="txt">
+              <span class="format-card">
+                <span class="format-icon format-icon--txt"><svg class="format-svg" aria-hidden="true"><use href="#i-txt"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">Solo texto</span>
+                  <span class="format-ext">TXT</span>
+                </span>
+              </span>
+            </label>
+
+            <label class="format-option">
+              <input type="radio" name="format" value="md">
+              <span class="format-card">
+                <span class="format-icon format-icon--txt"><svg class="format-svg" aria-hidden="true"><use href="#i-txt"/></svg></span>
+                <span class="format-text">
+                  <span class="format-name">Markdown</span>
+                  <span class="format-ext">MD</span>
+                </span>
+              </span>
+            </label>
+
             <label class="format-option is-disabled" title="PPT es un formato binario antiguo; requiere conversión externa">
               <input type="radio" name="format" value="ppt" disabled>
               <span class="format-card">
@@ -314,6 +342,15 @@
           </div>
         </div>
 
+        <div class="limits-section" id="limits-section" hidden>
+          <div class="section-label-row">
+            <span class="field-label">Límites de la conversión</span>
+            <span class="section-hint">Valores del servidor</span>
+          </div>
+          <dl class="limits-grid" id="limits-grid"></dl>
+          <p class="limits-warning" id="limits-warning" role="status" aria-live="polite"></p>
+        </div>
+
         <div class="preview-section" id="preview-section" hidden>
           <div class="preview-header">
             <span class="field-label">Vista previa</span>
@@ -323,14 +360,23 @@
         </div>
 
         <div class="action-section">
-          <button id="download-btn" type="button" class="btn btn-primary btn-lg">
-            <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
-            Descargar presentación
-          </button>
-          <p class="action-note">
+          <div class="action-buttons">
+            <button id="download-btn" type="button" class="btn btn-primary btn-lg">
+              <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+              Descargar presentación
+            </button>
+            <button id="background-btn" type="button" class="btn btn-secondary btn-lg" hidden>
+              Procesar en segundo plano
+            </button>
+          </div>
+          <p class="action-note" id="action-note">
             <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
-            Tu archivo se genera al instante y se descarga directamente.
+            <span id="action-note-text">Tu archivo se genera al instante y se descarga directamente.</span>
           </p>
+          <div class="job-controls" id="job-controls" hidden>
+            <p class="job-progress" id="job-progress" role="status" aria-live="polite"></p>
+            <button type="button" id="job-cancel-btn" class="job-cancel">Cancelar sondeo</button>
+          </div>
         </div>
 
         <div class="status-section">
@@ -361,6 +407,6 @@
   </footer>
 
   <script src="download-utils.js?v=1"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
