@@ -29,6 +29,7 @@ const { MemoryJobStore } = require('../services/jobStore');
 const { MemoryArtifactStore } = require('../services/artifactStore');
 const { createJobsRouter } = require('../api/jobs');
 const scribdRouter = require('../api/scribd');
+const { sendError, errorHandler } = require('../middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -554,8 +555,13 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
 
     return res.json(payload);
   } catch (error) {
-    console.error('Error en /api/inspect:', error);
-    return res.status(500).json({ success: false, error: error.message || 'Error al inspeccionar la presentación' });
+    return sendError(res, error, {
+      label: 'Error en /api/inspect',
+      forceStatus: 500,
+      maskServerErrors: false,
+      fallbackMessage: 'Error al inspeccionar la presentación',
+      logStack: true
+    });
   }
 });
 
@@ -624,15 +630,11 @@ app.post('/api/prompt', promptLimiter, async (req, res) => {
       characterCount: prompt.length
     });
   } catch (error) {
-    const status = error.status || 500;
-
-    if (status >= 500) {
-      console.error('Error en /api/prompt:', error);
-    }
-
-    return res.status(status).json({
-      success: false,
-      error: error.message || 'No se pudo generar el prompt'
+    return sendError(res, error, {
+      label: 'Error en /api/prompt',
+      maskServerErrors: false,
+      fallbackMessage: 'No se pudo generar el prompt',
+      logStack: true
     });
   }
 });
@@ -656,21 +658,11 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
       onCleanup: () => cleanupJobDir(result.filePath)
     });
   } catch (error) {
-    const status = error.status || 500;
-
     // Los errores 4xx son peticiones inválidas; solo se registran los 5xx.
-    if (status >= 500) {
-      console.error('Error en /api/download:', error.message);
-    }
-
-    // En producción, no exponer detalles internos en errores 500.
-    const errorMessage = process.env.NODE_ENV === 'production'
-      ? 'Error interno del servidor'
-      : error.message || 'Error al generar la descarga';
-
-    return res.status(status).json({
-      success: false,
-      error: errorMessage
+    // En producción se enmascaran los 5xx, como en la implementación original.
+    return sendError(res, error, {
+      label: 'Error en /api/download',
+      fallbackMessage: 'Error al generar la descarga'
     });
   }
 });
@@ -719,6 +711,8 @@ app.use((req, res) => {
 
   return res.status(404).send('<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>404</title></head><body><h1>404 - Página no encontrada</h1></body></html>');
 });
+
+app.use(errorHandler);
 
 if (require.main === module) {
   app.listen(PORT, () => {

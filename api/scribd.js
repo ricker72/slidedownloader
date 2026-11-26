@@ -21,21 +21,13 @@ const {
   scribdDownloadLimiter,
   scribdPreviewLimiter
 } = require('../middleware/rateLimiter');
+const { sendError: sendApiError } = require('../middleware/errorHandler');
 
 function sendError(res, error) {
-  const status = Number(error.status) || 500;
-
-  if (status >= 500) {
-    console.error('Error en /api/scribd:', error.message);
-  }
-
-  // En producción no se exponen detalles internos en los errores 500.
-  const message =
-    status >= 500 && process.env.NODE_ENV === 'production'
-      ? 'Error interno del servidor'
-      : error.message || 'No se pudo procesar el documento de Scribd';
-
-  return res.status(status).json({ success: false, error: message });
+  return sendApiError(res, error, {
+    label: 'Error en /api/scribd',
+    fallbackMessage: 'No se pudo procesar el documento de Scribd'
+  });
 }
 
 router.get('/inspect', scribdInspectLimiter, async (req, res) => {

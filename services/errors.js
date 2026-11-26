@@ -19,6 +19,13 @@ const ERROR_CODES = Object.freeze({
   RENDERER_UNAVAILABLE: 'RENDERER_UNAVAILABLE'
 });
 
+const CATALOG_CODES = new Set(Object.values(ERROR_CODES));
+
+/** Solo los códigos del catálogo se exponen al cliente (nunca ENOENT, etc.). */
+function isCatalogCode(code) {
+  return CATALOG_CODES.has(code);
+}
+
 function createServiceError(message, status, code) {
   const error = new Error(message);
   error.status = status;
@@ -46,24 +53,29 @@ function toPublicError(error, options = {}) {
   const {
     isProduction = false,
     fallbackMessage = 'Error interno del servidor',
-    maskServerErrors = isProduction
+    maskedMessage = 'Error interno del servidor',
+    maskServerErrors = isProduction,
+    forceStatus
   } = options;
 
-  const status = Number(error && error.status) || 500;
+  const status = Number(forceStatus) || Number(error && error.status) || 500;
   const isServerError = status >= 500;
   const message = isServerError && maskServerErrors
-    ? fallbackMessage
+    ? maskedMessage
     : (error && error.message) || fallbackMessage;
+
+  const code = (error && error.code) || null;
 
   return {
     status,
     message,
-    code: (error && error.code) || null
+    code: isCatalogCode(code) ? code : null
   };
 }
 
 module.exports = {
   ERROR_CODES,
+  isCatalogCode,
   createServiceError,
   DownloadValidationError,
   toPublicError

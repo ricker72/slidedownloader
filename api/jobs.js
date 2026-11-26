@@ -16,6 +16,7 @@ const path = require('node:path');
 const { DownloadValidationError, validateDownloadRequest } = require('../services/downloadService');
 const { hashToken, safeTokenEqual, toPublicJob } = require('../services/jobStore');
 const { jobsLimiter, jobPollLimiter, fileLimiter } = require('../middleware/rateLimiter');
+const { sendError } = require('../middleware/errorHandler');
 const { isValidJobId } = require('../utils/downloadJob');
 
 const MAX_FILENAME_LENGTH = 200;
@@ -103,15 +104,17 @@ function createJobsRouter({ jobStore, artifactStore, isEnabled = true } = {}) {
       });
     } catch (error) {
       if (error instanceof DownloadValidationError) {
-        return res.status(error.status).json({ success: false, error: error.message });
+        return sendError(res, error, {
+          log: false,
+          maskServerErrors: false,
+          fallbackMessage: error.message
+        });
       }
 
-      console.error('Error en /api/jobs:', error.message);
-      return res.status(500).json({
-        success: false,
-        error: process.env.NODE_ENV === 'production'
-          ? 'Error interno del servidor'
-          : error.message
+      return sendError(res, error, {
+        label: 'Error en /api/jobs',
+        forceStatus: 500,
+        fallbackMessage: error.message || 'Error interno del servidor'
       });
     }
   });
@@ -156,8 +159,13 @@ function createJobsRouter({ jobStore, artifactStore, isEnabled = true } = {}) {
       res.set('Cache-Control', 'no-store');
       return res.status(200).send(data);
     } catch (error) {
-      console.error('Error al servir artefacto:', error.message);
-      return res.status(500).json({ success: false, error: 'No se pudo leer el archivo' });
+      return sendError(res, error, {
+        label: 'Error al servir artefacto',
+        forceStatus: 500,
+        maskServerErrors: true,
+        maskedMessage: 'No se pudo leer el archivo',
+        fallbackMessage: 'No se pudo leer el archivo'
+      });
     }
   });
 
