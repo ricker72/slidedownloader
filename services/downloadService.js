@@ -12,16 +12,9 @@ const {
   normalizeSlideShareUrl,
   SUPPORTED_FORMATS
 } = require('./slideshareService');
+const { ERROR_CODES, DownloadValidationError } = require('./errors');
 
 const DOWNLOAD_QUALITIES = ['sd', 'hd'];
-
-class DownloadValidationError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.name = 'DownloadValidationError';
-    this.status = status;
-  }
-}
 
 /**
  * Valida y normaliza el cuerpo de una petición de descarga.
@@ -32,24 +25,26 @@ function validateDownloadRequest(body) {
   const { url, format, quality, imageUrls, title } = body || {};
 
   if (!url) {
-    throw new DownloadValidationError('Se requiere una URL');
+    throw new DownloadValidationError('Se requiere una URL', 400, ERROR_CODES.INVALID_URL);
   }
 
   const normalizedUrl = normalizeSlideShareUrl(url);
   if (!normalizedUrl) {
-    throw new DownloadValidationError('URL inválida de SlideShare');
+    throw new DownloadValidationError('URL inválida de SlideShare', 400, ERROR_CODES.INVALID_URL);
   }
 
   const selectedFormat = String(format || 'pdf').toLowerCase();
   if (!SUPPORTED_FORMATS.includes(selectedFormat)) {
     throw new DownloadValidationError(
-      `Formato no soportado. Formatos disponibles: ${SUPPORTED_FORMATS.join(', ')}`
+      `Formato no soportado. Formatos disponibles: ${SUPPORTED_FORMATS.join(', ')}`,
+      400,
+      ERROR_CODES.UNSUPPORTED_FORMAT
     );
   }
 
   const selectedQuality = String(quality || 'sd').toLowerCase();
   if (!DOWNLOAD_QUALITIES.includes(selectedQuality)) {
-    throw new DownloadValidationError('Calidad no soportada. Opciones: sd, hd');
+    throw new DownloadValidationError('Calidad no soportada. Opciones: sd, hd', 400, ERROR_CODES.UNSUPPORTED_QUALITY);
   }
 
   return {

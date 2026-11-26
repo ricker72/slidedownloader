@@ -23,6 +23,7 @@ const { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } = require
 const { v4: uuidv4 } = require('uuid');
 const { createOcrEngine } = require('./ocrService');
 const { TEXT_FORMATS, createTextExportFile } = require('./textExportService');
+const { ERROR_CODES, createServiceError } = require('./errors');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -601,7 +602,7 @@ async function downloadBinary(url, redirectCount = 0, maxBytes = MAX_IMAGE_BYTES
       if (Number.isFinite(declared) && declared > maxBytes) {
         response.resume();
         request.destroy();
-        return fail(createServiceError('La imagen es demasiado grande para convertirla.', 413, 'IMAGE_TOO_LARGE'));
+        return fail(createServiceError('La imagen es demasiado grande para convertirla.', 413, ERROR_CODES.IMAGE_TOO_LARGE));
       }
 
       const chunks = [];
@@ -614,7 +615,7 @@ async function downloadBinary(url, redirectCount = 0, maxBytes = MAX_IMAGE_BYTES
 
         if (total > maxBytes) {
           request.destroy();
-          return fail(createServiceError('La imagen es demasiado grande para convertirla.', 413, 'IMAGE_TOO_LARGE'));
+          return fail(createServiceError('La imagen es demasiado grande para convertirla.', 413, ERROR_CODES.IMAGE_TOO_LARGE));
         }
 
         chunks.push(chunk);
@@ -968,7 +969,7 @@ async function downloadImagesConcurrently(
         limitError = createServiceError(
           'La descarga de las diapositivas tardó demasiado. Intenta con menos diapositivas o calidad SD.',
           504,
-          'DECK_TIMEOUT'
+          ERROR_CODES.DECK_TIMEOUT
         );
         throw limitError;
       }
@@ -999,7 +1000,7 @@ async function downloadImagesConcurrently(
           limitError = createServiceError(
             'La presentación es demasiado grande para convertirla. Reduce el número de diapositivas o usa calidad SD.',
             413,
-            'DECK_TOO_LARGE'
+            ERROR_CODES.DECK_TOO_LARGE
           );
           throw limitError;
         }
@@ -1013,7 +1014,7 @@ async function downloadImagesConcurrently(
           height: dimensions ? dimensions.height : null
         };
       } catch (error) {
-        if (error && (error.code === 'DECK_TOO_LARGE' || error.code === 'DECK_TIMEOUT')) {
+        if (error && (error.code === ERROR_CODES.DECK_TOO_LARGE || error.code === ERROR_CODES.DECK_TIMEOUT)) {
           throw error;
         }
 
@@ -1217,7 +1218,7 @@ async function buildPresentationFileFromImages(imageUrls, format, outputDir, tit
   const extension = String(format || 'pdf').toLowerCase();
 
   if (!SUPPORTED_FORMATS.includes(extension)) {
-    throw createServiceError(`Formato no soportado: ${format}`, 400);
+    throw createServiceError(`Formato no soportado: ${format}`, 400, ERROR_CODES.UNSUPPORTED_FORMAT);
   }
 
   const outputFile = path.join(outputDir, sanitizeFileName(title || DEFAULT_TITLE, extension));
@@ -1243,27 +1244,20 @@ async function buildPresentationFileFromImages(imageUrls, format, outputDir, tit
   return { outputFile, filename: path.basename(outputFile) };
 }
 
-function createServiceError(message, status, code) {
-  const error = new Error(message);
-  error.status = status;
-  if (code) error.code = code;
-  return error;
-}
-
 async function downloadPresentation(url, format = 'pdf', quality = 'sd', options = {}) {
   const normalizedUrl = normalizeSlideShareUrl(url);
   if (!normalizedUrl) {
-    throw createServiceError('URL inválida. Debe ser una URL válida de SlideShare.', 400);
+    throw createServiceError('URL inválida. Debe ser una URL válida de SlideShare.', 400, ERROR_CODES.INVALID_URL);
   }
 
   const extension = String(format || 'pdf').toLowerCase();
   if (!SUPPORTED_FORMATS.includes(extension)) {
-    throw createServiceError(`Formato no soportado: ${format}`, 400);
+    throw createServiceError(`Formato no soportado: ${format}`, 400, ERROR_CODES.UNSUPPORTED_FORMAT);
   }
 
   const selectedQuality = String(quality || 'sd').toLowerCase();
   if (!QUALITY_LEVELS.includes(selectedQuality)) {
-    throw createServiceError(`Calidad no soportada: ${quality}`, 400);
+    throw createServiceError(`Calidad no soportada: ${quality}`, 400, ERROR_CODES.UNSUPPORTED_QUALITY);
   }
 
   const { jobId, jobDir } = buildJobDir();
@@ -1318,7 +1312,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
         // Los formatos binarios necesitan imágenes; la exportación de texto
         // puede continuar con los metadatos que ya tenía el cliente.
         if (!TEXT_FORMATS.includes(extension)) {
-          throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503);
+          throw createServiceError('No se pudo inspeccionar la presentación. Intenta nuevamente o configura un servidor de renderizado externo.', 503, ERROR_CODES.INSPECTION_FAILED);
         }
         textWarnings.push('No se pudo inspeccionar la presentación; se exportaron los metadatos disponibles.');
       } else {
@@ -1330,7 +1324,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
     }
 
     if (!imageUrls.length && !TEXT_FORMATS.includes(extension)) {
-      throw createServiceError('No se encontraron imágenes válidas para convertir la presentación.', 422);
+      throw createServiceError('No se encontraron imágenes válidas para convertir la presentación.', 422, ERROR_CODES.NO_IMAGES);
     }
 
     if (TEXT_FORMATS.includes(extension)) {

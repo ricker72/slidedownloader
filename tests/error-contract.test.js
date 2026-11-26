@@ -4,6 +4,12 @@ const http = require('node:http');
 
 const app = require('../server/app');
 const { downloadPresentation } = require('../services/slideshareService');
+const {
+  ERROR_CODES,
+  createServiceError,
+  DownloadValidationError,
+  toPublicError
+} = require('../services/errors');
 
 const SLIDE_URL = 'https://www.slideshare.net/slideshow/tema-de-prueba/123456789';
 
@@ -82,6 +88,26 @@ test('los endpoints conservan status y cuerpo exactos ante entradas inválidas',
       error: 'Se requiere el parámetro url con un enlace de Scribd'
     });
   });
+});
+
+test('el catálogo de errores conserva status, mensaje y código', () => {
+  const error = createServiceError('La imagen es demasiado grande para convertirla.', 413, ERROR_CODES.IMAGE_TOO_LARGE);
+  assert.equal(error.status, 413);
+  assert.equal(error.code, 'IMAGE_TOO_LARGE');
+  assert.deepEqual(toPublicError(error), {
+    status: 413,
+    message: 'La imagen es demasiado grande para convertirla.',
+    code: 'IMAGE_TOO_LARGE'
+  });
+
+  const internal = createServiceError('Detalle interno de la base de datos', 500);
+  assert.equal(toPublicError(internal, { isProduction: true }).message, 'Error interno del servidor');
+  assert.equal(toPublicError(internal, { isProduction: false }).message, 'Detalle interno de la base de datos');
+  assert.equal(toPublicError(internal, { isProduction: true, maskServerErrors: false }).message, 'Detalle interno de la base de datos');
+
+  const validation = new DownloadValidationError('Se requiere una URL');
+  assert.equal(validation.status, 400);
+  assert.equal(validation.code, ERROR_CODES.DOWNLOAD_VALIDATION);
 });
 
 test('los errores de servicio conservan su status y mensaje público', async () => {
