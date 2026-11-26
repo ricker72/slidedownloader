@@ -25,17 +25,24 @@ const { createOcrEngine } = require('./ocrService');
 const { TEXT_FORMATS, createTextExportFile } = require('./textExportService');
 const { ERROR_CODES, createServiceError } = require('./errors');
 
-const ROOT_DIR = path.join(__dirname, '..');
-const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-const DOWNLOADS_DIR = isVercel
-  ? path.join('/tmp', 'slidedownloader-downloads')
-  : path.join(ROOT_DIR, 'downloads');
-const DEFAULT_TITLE = 'presentacion';
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-];
+const {
+  DOWNLOADS_DIR,
+  DEFAULT_TITLE,
+  USER_AGENTS,
+  SUPPORTED_FORMATS,
+  QUALITY_LEVELS,
+  MAX_SLIDES,
+  MAX_IMAGE_BYTES,
+  MAX_TOTAL_IMAGE_BYTES,
+  IMAGE_CONCURRENCY,
+  IMAGE_TIMEOUT_MS,
+  MAX_DOWNLOAD_MS,
+  WEBP_CONVERSION,
+  getLimits,
+  resolveConversionMode,
+  resolveJpegQuality,
+  resolvePngMaxBytes
+} = require('../config');
 
 if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
@@ -121,82 +128,6 @@ function buildJobDir() {
 function isLikelyImageUrl(value) {
   if (!value || typeof value !== 'string') return false;
   return /\.(jpg|jpeg|png|webp|gif|bmp)(\?.*)?$/i.test(value) || value.includes('slidesharecdn');
-}
-
-function readPositiveInt(name, fallback) {
-  const value = Number(process.env[name]);
-  return Number.isInteger(value) && value > 0 ? value : fallback;
-}
-
-function readIntInRange(name, fallback, min, max) {
-  const value = Number(process.env[name]);
-  return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
-}
-
-// Calidad del JPEG generado al convertir WebP y modo de conversión preferido.
-// `auto` elige PNG para diapositivas con aspecto de texto/diagrama; `jpeg` y
-// `png` fuerzan el formato. Los valores se validan para no romper sharp.
-const JPEG_QUALITY = readIntInRange('JPEG_QUALITY', 92, 1, 100);
-const WEBP_PNG_MAX_BYTES = readPositiveInt('WEBP_PNG_MAX_BYTES', 8 * 1024 * 1024);
-const WEBP_CONVERSION_MODES = ['auto', 'jpeg', 'png'];
-
-function resolveConversionMode(value, fallback = 'auto') {
-  const mode = String(value ?? '').toLowerCase();
-  return WEBP_CONVERSION_MODES.includes(mode) ? mode : fallback;
-}
-
-const WEBP_CONVERSION = resolveConversionMode(process.env.WEBP_CONVERSION);
-
-function resolveJpegQuality(value) {
-  const candidate = Number(value);
-  return Number.isInteger(candidate) && candidate >= 1 && candidate <= 100
-    ? candidate
-    : JPEG_QUALITY;
-}
-
-function resolvePngMaxBytes(value) {
-  const candidate = Number(value);
-  return Number.isInteger(candidate) && candidate > 0 ? candidate : WEBP_PNG_MAX_BYTES;
-}
-
-// Tope de diapositivas por presentación. En serverless se baja porque cada
-// diapositiva HD ocupa memoria y tiempo dentro de una función de 60 s.
-const MAX_SLIDES = readPositiveInt('MAX_SLIDES', isVercel ? 80 : 200);
-
-// Límites de las imágenes que se descargan para el archivo final.
-const MAX_IMAGE_BYTES = readPositiveInt('MAX_IMAGE_BYTES', 15 * 1024 * 1024);
-const MAX_TOTAL_IMAGE_BYTES = readPositiveInt(
-  'MAX_TOTAL_IMAGE_BYTES',
-  isVercel ? 80 * 1024 * 1024 : 160 * 1024 * 1024
-);
-const IMAGE_CONCURRENCY = readPositiveInt('IMAGE_CONCURRENCY', isVercel ? 8 : 10);
-const IMAGE_TIMEOUT_MS = readPositiveInt('IMAGE_TIMEOUT_MS', isVercel ? 15000 : 30000);
-const MAX_DOWNLOAD_MS = readPositiveInt('MAX_DOWNLOAD_MS', isVercel ? 35000 : 5 * 60 * 1000);
-
-// Estimación orientativa que se muestra en la UI antes de descargar. No es una
-// medida real: el peso final depende del contenido de cada diapositiva.
-const ESTIMATED_BYTES_PER_SLIDE_SD = readPositiveInt('ESTIMATED_BYTES_PER_SLIDE_SD', 120 * 1024);
-const ESTIMATED_BYTES_PER_SLIDE_HD = readPositiveInt('ESTIMATED_BYTES_PER_SLIDE_HD', 450 * 1024);
-const PREVIEW_LIMIT = 200;
-
-function getLimits() {
-  return {
-    maxSlides: MAX_SLIDES,
-    maxImageBytes: MAX_IMAGE_BYTES,
-    maxTotalImageBytes: MAX_TOTAL_IMAGE_BYTES,
-    maxDownloadMs: MAX_DOWNLOAD_MS,
-    imageConcurrency: IMAGE_CONCURRENCY,
-    previewLimit: PREVIEW_LIMIT,
-    bytesPerSlide: {
-      sd: ESTIMATED_BYTES_PER_SLIDE_SD,
-      hd: ESTIMATED_BYTES_PER_SLIDE_HD
-    },
-    webpConversion: {
-      mode: WEBP_CONVERSION,
-      jpegQuality: JPEG_QUALITY,
-      pngMaxBytes: WEBP_PNG_MAX_BYTES
-    }
-  };
 }
 
 /**
@@ -333,11 +264,6 @@ function detectImageMime(buffer) {
 function toDataUri(buffer, mime) {
   return `data:${mime};base64,${buffer.toString('base64')}`;
 }
-
-const QUALITY_LEVELS = ['sd', 'hd'];
-
-// Formatos que la API puede generar de verdad.
-const SUPPORTED_FORMATS = ['pdf', 'pptx', 'ppsx', 'potx', 'docx', 'txt', 'md'];
 
 // PPSX y POTX son el mismo paquete OOXML que PPTX con otro tipo de contenido.
 const PPTX_CONTENT_TYPE =
