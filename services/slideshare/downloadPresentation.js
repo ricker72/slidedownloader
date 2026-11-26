@@ -4,7 +4,8 @@ const {
   DOWNLOADS_DIR,
   DEFAULT_TITLE,
   SUPPORTED_FORMATS,
-  QUALITY_LEVELS
+  QUALITY_LEVELS,
+  getRuntime
 } = require('../../config');
 const { ERROR_CODES, createServiceError } = require('../errors');
 const {
@@ -66,7 +67,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
     if (!imageUrls.length && !(TEXT_FORMATS.includes(extension) && providedTitle)) {
       let info = null;
 
-      const rendererConfigured = Boolean(process.env.RENDERER_URL);
+      const rendererConfigured = Boolean(getRuntime().rendererUrl);
 
       // Intento 1: renderizador externo (siempre intentar primero si está configurado,
       // porque es el único que hace scroll y obtiene TODAS las imágenes)
@@ -109,21 +110,26 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
 
     if (TEXT_FORMATS.includes(extension)) {
       const warnings = [...textWarnings];
-      const ocrEnabled = process.env.OCR_ENABLED === 'true';
+      const {
+        ocrEnabled,
+        ocrCacheDir,
+        ocrLang,
+        ocrMaxSlides,
+        ocrTimeoutMs
+      } = getRuntime();
       let source = 'metadata';
 
       if (ocrEnabled && imageUrls.length) {
         let engine = null;
 
         try {
-          const cacheDir = String(process.env.OCR_CACHE_DIR || '').trim()
-            || path.join(DOWNLOADS_DIR, '.ocr-cache');
+          const cacheDir = ocrCacheDir || path.join(DOWNLOADS_DIR, '.ocr-cache');
 
           engine = createOcrEngine({
             enabled: true,
-            lang: process.env.OCR_LANG,
-            maxSlides: process.env.OCR_MAX_SLIDES,
-            timeoutMs: process.env.OCR_TIMEOUT_MS,
+            lang: ocrLang,
+            maxSlides: ocrMaxSlides,
+            timeoutMs: ocrTimeoutMs,
             cacheDir,
             downloadImage,
             quality: selectedQuality

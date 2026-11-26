@@ -4,7 +4,7 @@ try {
 } catch (error) {
   chromium = null;
 }
-const { DEFAULT_TITLE, MAX_SLIDES, USER_AGENTS } = require('../../config');
+const { DEFAULT_TITLE, MAX_SLIDES, USER_AGENTS, getRuntime } = require('../../config');
 const { dedupeUrls, isLikelyImageUrl } = require('./slideUtils');
 
 async function extractPresentationInfo(url) {
@@ -215,7 +215,7 @@ async function extractPresentationInfoLite(url) {
  * desplegado en Railway, Render, fly.io, etc.
  */
 async function extractPresentationInfoViaRenderer(url) {
-  const rendererUrl = process.env.RENDERER_URL;
+  const { rendererUrl, rendererSecret } = getRuntime();
 
   if (!rendererUrl) {
     throw new Error('RENDERER_URL no configurada. No se puede usar el renderizador externo.');
@@ -226,7 +226,6 @@ async function extractPresentationInfoViaRenderer(url) {
 
   try {
     const headers = { 'Content-Type': 'application/json' };
-    const rendererSecret = String(process.env.RENDERER_SECRET || '').trim();
 
     if (rendererSecret) {
       headers.Authorization = `Bearer ${rendererSecret}`;

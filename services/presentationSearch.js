@@ -1,7 +1,8 @@
 const searchUtils = require('../public/search-utils');
+const { getRuntime } = require('../config');
 
 function getGoogleCseId() {
-  return String(process.env.GOOGLE_CSE_ID || '').trim();
+  return getRuntime().googleCseId;
 }
 
 module.exports = {

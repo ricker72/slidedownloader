@@ -7,6 +7,7 @@
  */
 
 const { toPublicError } = require('../services/errors');
+const { getRuntime } = require('../config');
 
 function sendError(res, error, options = {}) {
   const {
@@ -17,7 +18,7 @@ function sendError(res, error, options = {}) {
   } = options;
 
   const publicError = toPublicError(error, {
-    isProduction: process.env.NODE_ENV === 'production',
+    isProduction: getRuntime().isProduction,
     ...publicOptions
   });
 

@@ -30,17 +30,19 @@ const { MemoryArtifactStore } = require('../services/artifactStore');
 const { createJobsRouter } = require('../api/jobs');
 const scribdRouter = require('../api/scribd');
 const { sendError, errorHandler } = require('../middleware/errorHandler');
+const { getRuntime } = require('../config');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
 
-// En Vercel el sistema de archivos es de solo lectura excepto /tmp.
-// En local usamos la carpeta del proyecto.
-const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-
-// Los trabajos asíncronos son opt-in: sin JOBS_ENABLED=true el contrato
-// público sigue siendo exclusivamente el de /api/download.
-const jobsEnabled = process.env.JOBS_ENABLED === 'true';
+// Valores de arranque: el puerto, el perfil y el modo worker no cambian en caliente.
+const {
+  port: PORT,
+  isVercel,
+  jobsEnabled,
+  rendererUrl: configuredRendererUrl,
+  rendererSecret: configuredRendererSecret,
+  maxJobAttempts
+} = getRuntime();
 // El worker solo existe en el proceso principal. En Vercel (`api/index.js`
 // hace require de esta app) no hay worker ni stores compartidos, así que la
 // UI no debe ofrecer el modo asíncrono aunque la variable esté activa.
@@ -79,7 +81,7 @@ console.log('[SlideDownloader] publicDir =', publicDir, '| exists =', fs.existsS
 console.log('[SlideDownloader] downloadsDir =', downloadsDir);
 console.log('[SlideDownloader] isVercel =', isVercel);
 
-if (process.env.RENDERER_URL && !process.env.RENDERER_SECRET) {
+if (configuredRendererUrl && !configuredRendererSecret) {
   console.warn(
     '[SlideDownloader] RENDERER_URL está configurada sin RENDERER_SECRET: el renderizador rechazará las peticiones hasta definir el mismo secreto en ambos servicios.'
   );
@@ -258,7 +260,7 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  const allowedOrigins = String(process.env.ALLOWED_ORIGINS || 'http://localhost:8080')
+  const allowedOrigins = getRuntime().allowedOrigins
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
@@ -450,7 +452,7 @@ function getPublicLimits() {
     ...getLimits(),
     jobsEnabled: jobsRunnable,
     textFormats: ['txt', 'md'],
-    ocrEnabled: process.env.OCR_ENABLED === 'true'
+    ocrEnabled: getRuntime().ocrEnabled
   };
 }
 
@@ -475,7 +477,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
     let info = null;
     let method = 'lite';
     let fallbackUsed = false;
-    const rendererConfigured = Boolean(process.env.RENDERER_URL);
+    const rendererConfigured = Boolean(getRuntime().rendererUrl);
 
     // Intento 1: renderizador externo (siempre intentar primero si está configurado,
     // porque es el único que hace scroll y obtiene TODAS las imágenes)
@@ -587,7 +589,7 @@ app.post('/api/prompt', promptLimiter, async (req, res) => {
     // Si la interfaz solo envía la URL, el servidor completa el análisis.
     if (!analysisInput.title && slideUrl) {
       let info = null;
-      const rendererConfigured = Boolean(process.env.RENDERER_URL);
+      const rendererConfigured = Boolean(getRuntime().rendererUrl);
 
       // El renderizador obtiene todas las diapositivas y metadatos fiables.
       if (rendererConfigured) {
@@ -724,9 +726,8 @@ if (require.main === module) {
   if (jobsRunnable) {
     const { processNextJob, sweepExpired } = require('../services/jobWorker');
     const { DEFAULT_MAX_ATTEMPTS } = require('../services/jobStore');
-    const configuredAttempts = Number(process.env.MAX_JOB_ATTEMPTS);
-    const maxAttempts = Number.isFinite(configuredAttempts) && configuredAttempts > 0
-      ? Math.floor(configuredAttempts)
+    const maxAttempts = Number.isFinite(maxJobAttempts) && maxJobAttempts > 0
+      ? Math.floor(maxJobAttempts)
       : DEFAULT_MAX_ATTEMPTS;
 
     let inFlight = false;

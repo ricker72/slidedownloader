@@ -18,16 +18,17 @@ const { hashToken, safeTokenEqual, toPublicJob } = require('../services/jobStore
 const { jobsLimiter, jobPollLimiter, fileLimiter } = require('../middleware/rateLimiter');
 const { sendError } = require('../middleware/errorHandler');
 const { isValidJobId } = require('../utils/downloadJob');
+const { getRuntime } = require('../config');
 
 const MAX_FILENAME_LENGTH = 200;
 
 function configuredJobTtlMs() {
-  const ttl = Number(process.env.JOB_TTL_MS);
+  const ttl = getRuntime().jobTtlMs;
   return Number.isFinite(ttl) && ttl > 0 ? ttl : undefined;
 }
 
 function configuredMaxQueue() {
-  const max = Number(process.env.MAX_JOB_QUEUE);
+  const max = getRuntime().maxJobQueue;
   return Number.isFinite(max) && max > 0 ? Math.floor(max) : 50;
 }
 

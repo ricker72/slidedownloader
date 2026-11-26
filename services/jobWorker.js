@@ -17,6 +17,7 @@ const { hashToken, DEFAULT_MAX_ATTEMPTS } = require('./jobStore');
 const { MIME_BY_EXTENSION } = require('../utils/fileResponse');
 const { cleanupJobDirAsync } = require('../utils/downloadJob');
 const { DEFAULT_MAX_ARTIFACT_BYTES } = require('./artifactStore');
+const { getRuntime } = require('../config');
 
 // Por encima de MAX_DOWNLOAD_MS (5 min en local): una conversión larga no
 // debe ser reclamada por otro tick mientras sigue descargando imágenes.
@@ -63,7 +64,7 @@ async function processNextJob(options = {}) {
     lastStaleScanAt = 0,
     maxArtifactBytes = DEFAULT_MAX_ARTIFACT_BYTES,
     workerId = 'job-worker',
-    isProduction = process.env.NODE_ENV === 'production'
+    isProduction = getRuntime().isProduction
   } = options;
 
   if (!jobStore || !artifactStore) {

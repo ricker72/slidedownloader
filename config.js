@@ -77,7 +77,13 @@ const ESTIMATED_BYTES_PER_SLIDE_SD = readPositiveInt('ESTIMATED_BYTES_PER_SLIDE_
 const ESTIMATED_BYTES_PER_SLIDE_HD = readPositiveInt('ESTIMATED_BYTES_PER_SLIDE_HD', 450 * 1024);
 
 // Presupuesto de compresión de Scribd en serverless (0 = sin compresión).
-const MAX_OUTPUT_IMAGE_BYTES = isVercel ? 4 * 1024 * 1024 : 0;
+// Se respeta el valor configurado; el fallback solo aplica cuando VERCEL está
+// activo, tal como en la implementación original de scribdService.
+const MAX_OUTPUT_IMAGE_BYTES = (() => {
+  const configured = Number(process.env.MAX_OUTPUT_IMAGE_BYTES);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return process.env.VERCEL ? 4 * 1024 * 1024 : 0;
+})();
 
 const LIMITS = Object.freeze({
   maxSlides: MAX_SLIDES,
@@ -126,7 +132,7 @@ function getRuntime() {
     ocrTimeoutMs: process.env.OCR_TIMEOUT_MS,
     allowedOrigins: process.env.ALLOWED_ORIGINS || 'http://localhost:8080',
     corsOrigin: String(process.env.CORS_ORIGIN || '').trim(),
-    googleCseId: process.env.GOOGLE_CSE_ID || '',
+    googleCseId: String(process.env.GOOGLE_CSE_ID || '').trim(),
     jobTtlMs: Number(process.env.JOB_TTL_MS),
     maxJobQueue: Number(process.env.MAX_JOB_QUEUE) || 50,
     maxJobAttempts: Number(process.env.MAX_JOB_ATTEMPTS),
@@ -137,6 +143,28 @@ function getRuntime() {
     rendererMaxQueued: Number(process.env.MAX_QUEUED_RENDERS) || 0,
     rendererQueueTimeoutMs: readPositiveInt('QUEUE_TIMEOUT_MS', 30000),
     rendererTimeoutMs: readPositiveInt('RENDER_TIMEOUT_MS', 120000)
+  };
+}
+
+/** Configuración del proceso auxiliar de renderizado (servicio independiente). */
+function getRendererServiceConfig() {
+  return {
+    port: process.env.PORT || 3001,
+    corsOrigin: String(process.env.CORS_ORIGIN || '').trim(),
+    secret: String(process.env.RENDERER_SECRET || '').trim(),
+    maxConcurrent: Math.max(1, Number(process.env.MAX_CONCURRENT_RENDERS) || 2),
+    maxQueued: Math.max(0, Number(process.env.MAX_QUEUED_RENDERS) || 10),
+    queueTimeoutMs: Math.max(1000, Number(process.env.QUEUE_TIMEOUT_MS) || 30000),
+    renderTimeoutMs: Math.max(10000, Number(process.env.RENDER_TIMEOUT_MS) || 120000)
+  };
+}
+
+/** Configuración del relay de Scribd (servicio independiente). */
+function getScribdRelayConfig() {
+  return {
+    port: Number(process.env.PORT) || 3002,
+    secret: String(process.env.SCRIBD_RELAY_SECRET || '').trim(),
+    timeoutMs: Math.max(5000, Number(process.env.SCRIBD_RELAY_TIMEOUT_MS) || 20000)
   };
 }
 
@@ -166,6 +194,8 @@ module.exports = {
   profile,
   getLimits,
   getRuntime,
+  getRendererServiceConfig,
+  getScribdRelayConfig,
   readPositiveInt,
   readIntInRange,
   resolveConversionMode,

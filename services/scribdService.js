@@ -32,6 +32,7 @@ const {
   buildPresentationFileFromImages,
   detectImageMime
 } = require('./slideshareService');
+const { MAX_OUTPUT_IMAGE_BYTES, getRuntime } = require('../config');
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -55,11 +56,7 @@ const HD_SCALE = 2;
 // Vercel limita el cuerpo de respuesta de una función (~4,5 MB). Si el archivo
 // HD superara ese tope, se recomprime solo lo necesario para que la descarga
 // nunca falle. En local no hay tope y se conserva la calidad máxima.
-const OUTPUT_IMAGE_BUDGET = (() => {
-  const configured = Number(process.env.MAX_OUTPUT_IMAGE_BYTES);
-  if (Number.isFinite(configured) && configured > 0) return configured;
-  return process.env.VERCEL ? 4 * 1024 * 1024 : 0;
-})();
+const OUTPUT_IMAGE_BUDGET = MAX_OUTPUT_IMAGE_BYTES;
 
 const SCRIBD_HOST_RE = /^(?:[a-z0-9-]+\.)*scribd\.com$/i;
 const ASSET_HOST_RE = /^(?:[a-z0-9-]+\.)*scribdassets\.com$/i;
@@ -409,8 +406,7 @@ function createRelayTransport({ url, secret, fetchImpl = fetch } = {}) {
 }
 
 function createConfiguredTransport() {
-  const relayUrl = String(process.env.SCRIBD_RELAY_URL || '').trim();
-  const relaySecret = String(process.env.SCRIBD_RELAY_SECRET || '').trim();
+  const { scribdRelayUrl: relayUrl, scribdRelaySecret: relaySecret } = getRuntime();
 
   if (relayUrl && relaySecret) {
     return createRelayTransport({ url: relayUrl, secret: relaySecret });
