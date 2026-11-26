@@ -393,7 +393,6 @@ module.exports = {
   looksLikeTextOrDiagram,
   normalizeImageBuffer,
   downloadImage,
-  downloadBinary,
   getImageDimensions,
   fitImageWithinBox,
   downloadImagesConcurrently

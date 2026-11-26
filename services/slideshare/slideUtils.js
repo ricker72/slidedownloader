@@ -287,8 +287,6 @@ module.exports = {
   isLikelyImageUrl,
   normalizeSlideShareUrl,
   selectSlideImages,
-  parseSlideImageUrl,
-  buildSlideVariantUrl,
   applyImageQuality,
   getImageCandidates,
   sanitizeProvidedImageUrls,
@@ -296,6 +294,5 @@ module.exports = {
   cleanSlideTitle,
   sanitizeFileName,
   buildJobDir,
-  cleanupOldJobs,
-  SLIDE_QUALITY_TIERS
+  cleanupOldJobs
 };

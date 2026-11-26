@@ -5,7 +5,14 @@ try {
   chromium = null;
 }
 const { DEFAULT_TITLE, MAX_SLIDES, USER_AGENTS, getRuntime } = require('../../config');
+const { ERROR_CODES } = require('../errors');
 const { dedupeUrls, isLikelyImageUrl } = require('./slideUtils');
+
+function rendererError(message) {
+  const error = new Error(message);
+  error.code = ERROR_CODES.RENDERER_UNAVAILABLE;
+  return error;
+}
 
 async function extractPresentationInfo(url) {
   if (!chromium) {
@@ -218,7 +225,7 @@ async function extractPresentationInfoViaRenderer(url) {
   const { rendererUrl, rendererSecret } = getRuntime();
 
   if (!rendererUrl) {
-    throw new Error('RENDERER_URL no configurada. No se puede usar el renderizador externo.');
+    throw rendererError('RENDERER_URL no configurada. No se puede usar el renderizador externo.');
   }
 
   const controller = new AbortController();
@@ -242,13 +249,13 @@ async function extractPresentationInfoViaRenderer(url) {
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '');
-      throw new Error(`Renderizador externo respondió HTTP ${response.status}: ${errorBody}`);
+      throw rendererError(`Renderizador externo respondió HTTP ${response.status}: ${errorBody}`);
     }
 
     const data = await response.json();
 
     if (!data.success) {
-      throw new Error(data.error || 'Error del renderizador externo');
+      throw rendererError(data.error || 'Error del renderizador externo');
     }
 
     return {

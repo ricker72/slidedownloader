@@ -62,7 +62,7 @@ test('getRuntime lee en vivo banderas, URLs y entorno', () => {
 });
 
 test('las rutas y constantes respetan el perfil local', () => {
-  assert.ok(['local', 'vercel'].includes(config.profile));
+  assert.equal(config.profile, config.isVercel ? 'vercel' : 'local');
   assert.equal(config.DEFAULT_TITLE, 'presentacion');
   assert.deepEqual(config.SUPPORTED_FORMATS, ['pdf', 'pptx', 'ppsx', 'potx', 'docx', 'txt', 'md']);
   assert.equal(config.USER_AGENTS.length, 3);

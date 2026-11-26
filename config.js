@@ -146,28 +146,6 @@ function getRuntime() {
   };
 }
 
-/** Configuración del proceso auxiliar de renderizado (servicio independiente). */
-function getRendererServiceConfig() {
-  return {
-    port: process.env.PORT || 3001,
-    corsOrigin: String(process.env.CORS_ORIGIN || '').trim(),
-    secret: String(process.env.RENDERER_SECRET || '').trim(),
-    maxConcurrent: Math.max(1, Number(process.env.MAX_CONCURRENT_RENDERS) || 2),
-    maxQueued: Math.max(0, Number(process.env.MAX_QUEUED_RENDERS) || 10),
-    queueTimeoutMs: Math.max(1000, Number(process.env.QUEUE_TIMEOUT_MS) || 30000),
-    renderTimeoutMs: Math.max(10000, Number(process.env.RENDER_TIMEOUT_MS) || 120000)
-  };
-}
-
-/** Configuración del relay de Scribd (servicio independiente). */
-function getScribdRelayConfig() {
-  return {
-    port: Number(process.env.PORT) || 3002,
-    secret: String(process.env.SCRIBD_RELAY_SECRET || '').trim(),
-    timeoutMs: Math.max(5000, Number(process.env.SCRIBD_RELAY_TIMEOUT_MS) || 20000)
-  };
-}
-
 module.exports = {
   ROOT_DIR,
   DOWNLOADS_DIR,
@@ -194,8 +172,6 @@ module.exports = {
   profile,
   getLimits,
   getRuntime,
-  getRendererServiceConfig,
-  getScribdRelayConfig,
   readPositiveInt,
   readIntInRange,
   resolveConversionMode,

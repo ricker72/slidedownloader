@@ -40,19 +40,22 @@ test('los endpoints conservan status y cuerpo exactos ante entradas inválidas',
         '/api/inspect',
         { url: 'https://ejemplo.com/no-slideshare' },
         400,
-        { success: false, error: 'URL inválida de SlideShare' }
+        { success: false, error: 'URL inválida de SlideShare' },
+        null
       ],
       [
         '/api/prompt',
         { url: 'https://ejemplo.com/no-slideshare' },
         400,
-        { success: false, error: 'URL inválida de SlideShare' }
+        { success: false, error: 'URL inválida de SlideShare' },
+        null
       ],
       [
         '/api/download',
         {},
         400,
-        { success: false, error: 'Se requiere una URL' }
+        { success: false, error: 'Se requiere una URL' },
+        'INVALID_URL'
       ],
       [
         '/api/download',
@@ -61,19 +64,22 @@ test('los endpoints conservan status y cuerpo exactos ante entradas inválidas',
         {
           success: false,
           error: 'Formato no soportado. Formatos disponibles: pdf, pptx, ppsx, potx, docx, txt, md'
-        }
+        },
+        'UNSUPPORTED_FORMAT'
       ],
       [
         '/api/download',
         { url: SLIDE_URL, quality: 'xx' },
         400,
-        { success: false, error: 'Calidad no soportada. Opciones: sd, hd' }
+        { success: false, error: 'Calidad no soportada. Opciones: sd, hd' },
+        'UNSUPPORTED_QUALITY'
       ]
     ];
 
-    for (const [path, body, status, expected] of cases) {
+    for (const [path, body, status, expected, expectedCode] of cases) {
       const response = await postJson(baseUrl, path, body);
       assert.equal(response.status, status, path);
+      assert.equal(response.headers.get('x-error-code'), expectedCode, path);
       assert.deepEqual(await response.json(), expected, path);
     }
 
