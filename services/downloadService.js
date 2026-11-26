@@ -69,13 +69,19 @@ async function generateDownload(body, options = {}) {
   const generate = options.generate || downloadPresentation;
 
   const cachedInspection = getCachedInspection(request.url) || null;
-
-  return generate(request.url, request.format, request.quality, {
+  const generateOptions = {
     imageUrls: Array.isArray(request.imageUrls) && request.imageUrls.length
       ? request.imageUrls
       : cachedInspection?.previewImages,
     title: request.title || cachedInspection?.title
-  });
+  };
+
+  // Solo se añade cuando existe para conservar la forma histórica de `options`.
+  if (typeof options.onProgress === 'function') {
+    generateOptions.onProgress = options.onProgress;
+  }
+
+  return generate(request.url, request.format, request.quality, generateOptions);
 }
 
 module.exports = {

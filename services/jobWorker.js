@@ -13,6 +13,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 
 const { generateDownload, DownloadValidationError } = require('./downloadService');
+const { progressPercent } = require('./progressTracker');
 const { hashToken, DEFAULT_MAX_ATTEMPTS } = require('./jobStore');
 const { MIME_BY_EXTENSION } = require('../utils/fileResponse');
 const { cleanupJobDirAsync } = require('../utils/downloadJob');
@@ -33,6 +34,19 @@ function safeFileName(value, format) {
 
 function retryDelayMs(attempts) {
   return Math.min(2000 * (2 ** Math.max(0, attempts - 1)), 30_000);
+}
+
+/** Texto corto y sin datos sensibles para el sondeo del navegador. */
+function progressDetail(state) {
+  if (state.stage === 'analyzing') return 'Analizando presentación';
+  if (state.stage === 'downloading-images') {
+    return state.total ? `Descargando ${state.current}/${state.total}` : 'Descargando imágenes';
+  }
+  if (state.stage === 'generating-file') {
+    return `Generando ${String(state.format || 'archivo').toUpperCase()}`;
+  }
+  if (state.stage === 'failed') return 'No se pudo generar el archivo';
+  return '';
 }
 
 function isPermanentError(error) {
@@ -96,7 +110,25 @@ async function processNextJob(options = {}) {
   const attempts = job.attempts;
 
   try {
-    const result = await generate(job.payload, {});
+    const progressState = { stage: 'preparing', current: 0, total: null, failed: 0, format: job.payload.format };
+    let lastPublished = { stage: '', percent: -10 };
+
+    const onProgress = (patch = {}) => {
+      Object.assign(progressState, patch);
+
+      const percent = progressPercent(progressState);
+      const stage = progressState.stage;
+      if (stage === lastPublished.stage && percent - lastPublished.percent < 5) return;
+
+      lastPublished = { stage, percent };
+      jobStore.update(job.id, {
+        progress: percent,
+        stage,
+        detail: progressDetail(progressState)
+      });
+    };
+
+    const result = await generate(job.payload, { onProgress });
 
     // Si otro worker recuperó el lease, no publicamos su resultado.
     const current = jobStore.get(job.id);
@@ -124,6 +156,8 @@ async function processNextJob(options = {}) {
     jobStore.update(job.id, {
       status: 'done',
       progress: 100,
+      stage: 'done',
+      detail: 'Archivo listo',
       claimToken: null,
       result: {
         fileName,
@@ -152,6 +186,8 @@ async function processNextJob(options = {}) {
     jobStore.update(job.id, {
       status: canRetry ? 'queued' : 'failed',
       progress: 0,
+      stage: canRetry ? 'queued' : 'failed',
+      detail: canRetry ? '' : 'No se pudo generar el archivo',
       claimToken: null,
       nextAttemptAt: canRetry ? Date.now() + retryDelayMs(attempts) : 0,
       error: canRetry ? null : errorMessage

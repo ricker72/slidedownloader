@@ -307,19 +307,26 @@ function fitImageWithinBox(imageWidth, imageHeight, box) {
  *
  * Se corta si el total de bytes supera `maxTotalBytes` para no agotar la
  * memoria de una función serverless.
+ *
+ * `onProgress` es opcional y se llama tras cada imagen con
+ * `{ current, total, failedUrl? }`. La URL fallida solo se usa internamente
+ * para avisar al usuario; nunca se publica en el endpoint de progreso.
  */
 async function downloadImagesConcurrently(
   imageItems,
   quality,
   concurrency = IMAGE_CONCURRENCY,
-  maxTotalBytes = MAX_TOTAL_IMAGE_BYTES
+  maxTotalBytes = MAX_TOTAL_IMAGE_BYTES,
+  onProgress = null
 ) {
   const list = Array.isArray(imageItems) ? imageItems : [];
   const results = new Array(list.length).fill(null);
   let cursor = 0;
+  let completed = 0;
   let totalBytes = 0;
   let limitError = null;
   const deadline = Date.now() + MAX_DOWNLOAD_MS;
+  const notify = typeof onProgress === 'function' ? onProgress : () => {};
 
   const workers = Array.from({ length: Math.min(concurrency, list.length) }, async () => {
     while (cursor < list.length) {
@@ -338,20 +345,21 @@ async function downloadImagesConcurrently(
       cursor += 1;
 
       const item = list[index];
+      let sourceUrl = '';
+      let failedUrl = null;
 
       try {
         let buffer;
         let mime;
-        let url;
 
         if (item && typeof item === 'object' && Buffer.isBuffer(item.buffer)) {
           buffer = item.buffer;
           mime = item.mime || detectImageMime(buffer);
-          url = item.url || `page-${index + 1}`;
+          sourceUrl = item.url || `page-${index + 1}`;
         } else {
           buffer = await downloadImage(item, quality);
           mime = detectImageMime(buffer);
-          url = item;
+          sourceUrl = String(item);
         }
 
         totalBytes += buffer.length;
@@ -367,7 +375,7 @@ async function downloadImagesConcurrently(
 
         const dimensions = await getImageDimensions(buffer);
         results[index] = {
-          url,
+          url: sourceUrl,
           buffer,
           mime,
           width: dimensions ? dimensions.width : null,
@@ -379,6 +387,14 @@ async function downloadImagesConcurrently(
         }
 
         console.warn(`No se pudo descargar la imagen ${item}:`, error.message);
+        failedUrl = sourceUrl || String(item);
+      } finally {
+        // La finalización puede llegar desordenada por la concurrencia; el
+        // contador publicado debe avanzar 1, 2, 3… y nunca retroceder.
+        completed += 1;
+        notify(failedUrl
+          ? { current: completed, total: list.length, failedUrl }
+          : { current: completed, total: list.length });
       }
     }
   });

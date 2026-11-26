@@ -111,6 +111,14 @@ const jobPollLimiter = rateLimiter({
   message: 'Demasiadas consultas de estado. Intenta de nuevo más tarde.',
   keyFn: socketKey
 });
+// El sondeo de la barra de progreso es más frecuente (700 ms) que el de jobs
+// y usa un contador propio para no agotar el cupo compartido.
+const progressLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  max: 180,
+  message: 'Demasiadas consultas de progreso. Intenta de nuevo más tarde.',
+  keyFn: socketKey
+});
 
 // Scribd: cada análisis o descarga hace varias peticiones al CDN externo.
 const scribdInspectLimiter = rateLimiter({
@@ -141,6 +149,7 @@ module.exports = {
   pingLimiter,
   jobsLimiter,
   jobPollLimiter,
+  progressLimiter,
   scribdInspectLimiter,
   scribdDownloadLimiter,
   scribdPreviewLimiter

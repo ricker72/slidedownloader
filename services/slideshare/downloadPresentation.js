@@ -48,6 +48,20 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
   const providedImages = sanitizeProvidedImageUrls(options.imageUrls);
   const providedTitle = typeof options.title === 'string' ? cleanSlideTitle(options.title) : '';
 
+  // El progreso público nunca incluye URLs: solo etapas y contadores.
+  const upstreamProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+  const failedImages = [];
+  const reportProgress = (update = {}) => {
+    const { failedUrl, ...safe } = update;
+
+    if (failedUrl) {
+      failedImages.push(String(failedUrl));
+      safe.failed = failedImages.length;
+    }
+
+    if (upstreamProgress) upstreamProgress(safe);
+  };
+
   const cleanup = () => {
     try {
       fs.rmSync(jobDir, { recursive: true, force: true });
@@ -57,6 +71,8 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
   };
 
   try {
+    reportProgress({ stage: 'preparing', format: extension, quality: selectedQuality });
+
     let imageUrls = providedImages;
     let title = providedTitle || DEFAULT_TITLE;
     let slideTexts = [];
@@ -65,6 +81,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
     // En la exportación de texto, un título ya detectado evita repetir la
     // inspección de la URL cuando el cliente no aportó imágenes.
     if (!imageUrls.length && !(TEXT_FORMATS.includes(extension) && providedTitle)) {
+      reportProgress({ stage: 'analyzing' });
       let info = null;
 
       const rendererConfigured = Boolean(getRuntime().rendererUrl);
@@ -109,6 +126,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
     }
 
     if (TEXT_FORMATS.includes(extension)) {
+      reportProgress({ stage: 'generating-file' });
       const warnings = [...textWarnings];
       const {
         ocrEnabled,
@@ -179,11 +197,24 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
         fileName: textFile.filename,
         filePath: textFile.outputFile,
         warnings,
+        failedSlideCount: 0,
         downloadUrl: `/download/${jobId}/${textFile.filename}`
       };
     }
 
-    const result = await buildPresentationFileFromImages(imageUrls, extension, jobDir, title, selectedQuality);
+    reportProgress({ stage: 'downloading-images', current: 0, total: imageUrls.length });
+    const result = await buildPresentationFileFromImages(
+      imageUrls,
+      extension,
+      jobDir,
+      title,
+      selectedQuality,
+      reportProgress
+    );
+
+    const warnings = failedImages.length
+      ? [`${failedImages.length} diapositiva${failedImages.length === 1 ? '' : 's'} no se pudieron descargar; el archivo incluye el resto.`]
+      : [];
 
     return {
       success: true,
@@ -192,14 +223,17 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
       format: extension,
       quality: selectedQuality,
       source: providedImages.length ? 'preview' : 'renderer',
-      imageCount: imageUrls.length,
+      imageCount: Math.max(0, imageUrls.length - failedImages.length),
       fileName: result.filename,
       filePath: result.outputFile,
+      warnings,
+      failedSlideCount: failedImages.length,
       // Se conserva por compatibilidad; la API envía el archivo en la misma
       // respuesta y borra el directorio del trabajo.
       downloadUrl: `/download/${jobId}/${result.filename}`
     };
   } catch (error) {
+    reportProgress({ stage: 'failed' });
     // No dejar carpetas vacías cuando la generación falla.
     cleanup();
     throw error;

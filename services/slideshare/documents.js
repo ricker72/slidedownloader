@@ -24,8 +24,9 @@ const PPTX_VARIANTS = {
 // SlideShare publica cada diapositiva en varias "carpetas de calidad":
 //   /75/ → 2048 px (máxima), /95/ → 1024 px, /85/ → 638/320 px.
 
-async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd') {
-  const downloaded = await downloadImagesConcurrently(imageUrls, quality);
+async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd', onProgress = null) {
+  const downloaded = await downloadImagesConcurrently(imageUrls, quality, undefined, undefined, onProgress);
+  if (typeof onProgress === 'function') onProgress({ stage: 'generating-file' });
   const validImages = [];
 
   // pdfkit solo admite PNG y JPEG.
@@ -70,7 +71,7 @@ async function createPdfFromImages(imageUrls, outputPath, title, quality = 'sd')
 const PPTX_IMAGE_BOX = { x: 0.5, y: 0.8, w: 12.33, h: 6.5 };
 const DOCX_IMAGE_BOX = { x: 0, y: 0, w: 500, h: 300 };
 
-async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd') {
+async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd', onProgress = null) {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
   pptx.author = 'SlideDownloader';
@@ -78,7 +79,8 @@ async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd'
   pptx.subject = 'Presentation export';
   pptx.title = title || DEFAULT_TITLE;
 
-  const downloaded = await downloadImagesConcurrently(imageUrls, quality);
+  const downloaded = await downloadImagesConcurrently(imageUrls, quality, undefined, undefined, onProgress);
+  if (typeof onProgress === 'function') onProgress({ stage: 'generating-file' });
   const validImages = [];
 
   // pptxgenjs + PowerPoint admiten de forma fiable PNG y JPEG.
@@ -127,7 +129,7 @@ async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd'
   await pptx.writeFile({ fileName: outputPath });
 }
 
-async function createDocxFromImages(imageUrls, outputPath, title, quality = 'sd') {
+async function createDocxFromImages(imageUrls, outputPath, title, quality = 'sd', onProgress = null) {
   const children = [
     new Paragraph({
       text: title || DEFAULT_TITLE,
@@ -136,7 +138,8 @@ async function createDocxFromImages(imageUrls, outputPath, title, quality = 'sd'
     })
   ];
 
-  const downloaded = await downloadImagesConcurrently(imageUrls, quality);
+  const downloaded = await downloadImagesConcurrently(imageUrls, quality, undefined, undefined, onProgress);
+  if (typeof onProgress === 'function') onProgress({ stage: 'generating-file' });
   const validImages = [];
 
   // docx solo admite imágenes PNG y JPEG de forma fiable.
@@ -211,7 +214,7 @@ async function convertPptxToVariant(pptxPath, outputPath, variant) {
   fs.writeFileSync(outputPath, buffer);
 }
 
-async function buildPresentationFileFromImages(imageUrls, format, outputDir, title, quality = 'sd') {
+async function buildPresentationFileFromImages(imageUrls, format, outputDir, title, quality = 'sd', onProgress = null) {
   const extension = String(format || 'pdf').toLowerCase();
 
   if (!SUPPORTED_FORMATS.includes(extension)) {
@@ -221,17 +224,17 @@ async function buildPresentationFileFromImages(imageUrls, format, outputDir, tit
   const outputFile = path.join(outputDir, sanitizeFileName(title || DEFAULT_TITLE, extension));
 
   if (extension === 'pdf') {
-    await createPdfFromImages(imageUrls, outputFile, title, quality);
+    await createPdfFromImages(imageUrls, outputFile, title, quality, onProgress);
   } else if (extension === 'pptx') {
-    await createPptxFromImages(imageUrls, outputFile, title, quality);
+    await createPptxFromImages(imageUrls, outputFile, title, quality, onProgress);
   } else if (extension === 'docx') {
-    await createDocxFromImages(imageUrls, outputFile, title, quality);
+    await createDocxFromImages(imageUrls, outputFile, title, quality, onProgress);
   } else {
     // PPSX y POTX: se genera un PPTX temporal y se cambia su tipo de contenido.
     const tempPptx = path.join(outputDir, `.__tmp-${Date.now()}-${process.pid}.pptx`);
 
     try {
-      await createPptxFromImages(imageUrls, tempPptx, title, quality);
+      await createPptxFromImages(imageUrls, tempPptx, title, quality, onProgress);
       await convertPptxToVariant(tempPptx, outputFile, extension);
     } finally {
       fs.rmSync(tempPptx, { force: true });

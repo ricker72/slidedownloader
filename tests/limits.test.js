@@ -156,7 +156,7 @@ test('la UI muestra los límites sin inyectar HTML', () => {
   assert.match(html, /id="limits-section"[^>]*hidden/);
   assert.match(html, /id="limits-grid"/);
   assert.match(html, /id="limits-warning"[^>]*aria-live="polite"/);
-  assert.match(html, /app\.js\?v=10/);
+  assert.match(html, /app\.js\?v=11/);
 
   assert.match(appJs, /fetch\('\/api\/limits'\)/);
   assert.match(appJs, /applyLimits\(data\.limits\)/);

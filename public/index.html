@@ -355,6 +355,7 @@
           <div class="preview-header">
             <span class="field-label">Vista previa</span>
             <span class="preview-count" id="preview-count"></span>
+            <button type="button" id="preview-layout-btn" class="preview-layout-btn" aria-pressed="false">Vista lista</button>
           </div>
           <div class="preview-grid" id="preview-grid"></div>
         </div>
@@ -364,6 +365,12 @@
             <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
             <span>Solo descargas contenido público del que tengas derechos.</span>
           </p>
+          <div class="download-progress" id="download-progress" hidden>
+            <div class="download-progress-track" id="download-progress-track" role="progressbar" aria-label="Progreso de la descarga" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="download-progress-bar" id="download-progress-bar"></div>
+            </div>
+            <p class="download-progress-text" id="download-progress-text" role="status" aria-live="polite"></p>
+          </div>
           <div class="action-buttons">
             <button id="download-btn" type="button" class="btn btn-primary btn-lg">
               <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
@@ -392,6 +399,14 @@
             <p>Ingresa una URL y selecciona el formato para comenzar</p>
           </div>
         </div>
+
+        <section class="recent-section" id="recent-section" aria-labelledby="recent-title" hidden>
+          <div class="preview-header">
+            <span class="field-label" id="recent-title">Descargas recientes</span>
+            <button type="button" id="recent-clear-btn" class="recent-clear">Borrar historial</button>
+          </div>
+          <ul class="recent-list" id="recent-list"></ul>
+        </section>
       </section>
     </div>
   </main>
@@ -410,7 +425,8 @@
     </div>
   </footer>
 
-  <script src="download-utils.js?v=1"></script>
-  <script src="app.js?v=10"></script>
+  <script src="local-state.js?v=1"></script>
+  <script src="download-utils.js?v=2"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

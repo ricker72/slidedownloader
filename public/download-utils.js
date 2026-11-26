@@ -52,6 +52,7 @@
     const totalPagesHeader = header('X-Download-Total-Pages');
     const slides = slidesHeader ? Number(slidesHeader) : NaN;
     const totalPages = totalPagesHeader ? Number(totalPagesHeader) : NaN;
+    const failedSlides = Number(header('X-Download-Failed-Slides'));
     const warnings = header('X-Download-Warnings');
 
     return {
@@ -61,6 +62,7 @@
       slideCount: Number.isFinite(slides) ? slides : null,
       totalPages: Number.isFinite(totalPages) ? totalPages : null,
       source: header('X-Download-Source'),
+      failedSlideCount: Number.isFinite(failedSlides) ? failedSlides : 0,
       warnings: warnings ? warnings.split(' | ') : []
     };
   }

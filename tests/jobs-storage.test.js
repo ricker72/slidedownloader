@@ -81,7 +81,7 @@ test('safeTokenEqual compara en tiempo constante y toPublicJob oculta secretos',
   const publicJob = toPublicJob(job);
 
   assert.deepEqual(Object.keys(publicJob).sort(), [
-    'createdAt', 'id', 'progress', 'result', 'status', 'updatedAt'
+    'createdAt', 'detail', 'id', 'progress', 'result', 'stage', 'status', 'updatedAt'
   ]);
   assert.equal(publicJob.result.fileName, 'deck.pdf');
   assert.equal(JSON.stringify(publicJob).includes('tokenHash'), false);

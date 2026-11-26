@@ -40,7 +40,8 @@ function buildDownloadHeaders({
   slideCount,
   totalPages,
   source,
-  warnings
+  warnings,
+  failedSlideCount
 } = {}) {
   const headers = {};
 
@@ -51,6 +52,9 @@ function buildDownloadHeaders({
   if (slideCount != null) headers['X-Download-Slides'] = String(slideCount);
   if (totalPages != null) headers['X-Download-Total-Pages'] = String(totalPages);
   if (source) headers['X-Download-Source'] = encodeHeader(source);
+  if (Number.isFinite(Number(failedSlideCount)) && Number(failedSlideCount) > 0) {
+    headers['X-Download-Failed-Slides'] = String(Math.round(Number(failedSlideCount)));
+  }
   if (Array.isArray(warnings) && warnings.length) {
     headers['X-Download-Warnings'] = encodeHeader(warnings.join(' | '));
   }

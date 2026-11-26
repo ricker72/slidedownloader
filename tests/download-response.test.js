@@ -193,3 +193,48 @@ test('POST /api/scribd/download envía el archivo y limpia el trabajo', async ()
   }
 });
 
+test('GET /api/progress/:id valida el ID y no inventa sesiones', async () => {
+  const { port, server } = await startServerForTest();
+
+  try {
+    const invalid = await fetch(`http://127.0.0.1:${port}/api/progress/no-es-un-uuid`);
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).success, false);
+
+    const unknown = await fetch(`http://127.0.0.1:${port}/api/progress/${randomUUID()}`);
+    assert.equal(unknown.status, 404);
+    assert.equal((await unknown.json()).success, false);
+  } finally {
+    server.close();
+  }
+});
+
+test('un progressId publica el fallo de validación sin filtrar la URL de origen', async () => {
+  const { port, server } = await startServerForTest();
+  const progressId = randomUUID();
+
+  try {
+    const download = await fetch(`http://127.0.0.1:${port}/api/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://example.com/privada',
+        format: 'pdf',
+        progressId
+      })
+    });
+    assert.equal(download.status, 400);
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/progress/${progressId}`);
+    assert.equal(response.status, 200);
+
+    const data = await response.json();
+    assert.equal(data.success, true);
+    assert.equal(data.progress.stage, 'failed');
+    assert.equal(data.progress.format, 'pdf');
+    assert.doesNotMatch(JSON.stringify(data), /example\.com/);
+  } finally {
+    server.close();
+  }
+});
+

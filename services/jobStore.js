@@ -48,6 +48,8 @@ function normalizeJob(input) {
     tokenHash: String(input.tokenHash || ''),
     attempts: Number(input.attempts) || 0,
     progress: Number(input.progress) || 0,
+    stage: typeof input.stage === 'string' && input.stage.length <= 32 ? input.stage : 'queued',
+    detail: typeof input.detail === 'string' ? input.detail.slice(0, 160) : '',
     claimToken: input.claimToken || null,
     nextAttemptAt: Math.max(0, Number(input.nextAttemptAt) || 0),
     result: input.result || null,
@@ -66,6 +68,8 @@ function toPublicJob(job) {
     id: job.id,
     status: job.status,
     progress: job.progress,
+    stage: job.stage,
+    detail: job.detail,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt
   };

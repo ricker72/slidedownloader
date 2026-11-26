@@ -8,15 +8,23 @@ const actionNoteText = document.getElementById('action-note-text');
 const jobControls = document.getElementById('job-controls');
 const jobProgress = document.getElementById('job-progress');
 const jobCancelBtn = document.getElementById('job-cancel-btn');
+const downloadProgress = document.getElementById('download-progress');
+const downloadProgressTrack = document.getElementById('download-progress-track');
+const downloadProgressBar = document.getElementById('download-progress-bar');
+const downloadProgressText = document.getElementById('download-progress-text');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const statusDetail = document.getElementById('status-detail');
 const previewSection = document.getElementById('preview-section');
 const previewGrid = document.getElementById('preview-grid');
 const previewCount = document.getElementById('preview-count');
+const previewLayoutBtn = document.getElementById('preview-layout-btn');
 const limitsSection = document.getElementById('limits-section');
 const limitsGrid = document.getElementById('limits-grid');
 const limitsWarning = document.getElementById('limits-warning');
+const recentSection = document.getElementById('recent-section');
+const recentList = document.getElementById('recent-list');
+const recentClearBtn = document.getElementById('recent-clear-btn');
 
 // Estado actual
 let currentFormat = 'pptx';
@@ -40,7 +48,10 @@ let previewLimit = PREVIEW_LIMIT;
 let jobsEnabled = false;
 let jobPollTimer = null;
 let activeJobPollUrl = '';
+let progressPollTimer = null;
+let activeProgressId = '';
 
+const PROGRESS_POLL_MS = 700;
 const JOB_POLL_INITIAL_MS = 1000;
 const JOB_POLL_MAX_MS = 10000;
 const JOB_POLL_TIMEOUT_MS = 10 * 60 * 1000;
@@ -68,6 +79,8 @@ const QUALITY_NAMES = {
 document.addEventListener('DOMContentLoaded', () => {
   pasteBtn.addEventListener('click', handlePaste);
   detectBtn.addEventListener('click', handleDetect);
+  previewLayoutBtn?.addEventListener('click', togglePreviewLayout);
+  recentClearBtn?.addEventListener('click', clearRecentHistory);
   downloadBtn.addEventListener('click', handleDownload);
   backgroundBtn.addEventListener('click', handleBackgroundDownload);
   jobCancelBtn.addEventListener('click', cancelJobPolling);
@@ -85,6 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
       renderLimits();
     });
   }
+
+  const savedLayout = globalThis.SlideDownloaderLocalState?.readPreference('previewLayout', 'grid');
+  applyPreviewLayout(savedLayout === 'list');
+  renderRecentHistory();
 
   loadLimits();
   checkServerStatus();
@@ -282,6 +299,21 @@ async function inspectUrl(url, { automatic = false } = {}) {
   }
 }
 
+/** Aplicar el modo lista guardado, si el almacenamiento local está disponible. */
+function applyPreviewLayout(isList) {
+  if (!previewGrid || !previewLayoutBtn) return;
+
+  previewGrid.classList.toggle('preview-grid--list', Boolean(isList));
+  previewLayoutBtn.setAttribute('aria-pressed', isList ? 'true' : 'false');
+  previewLayoutBtn.textContent = isList ? 'Vista cuadrícula' : 'Vista lista';
+}
+
+function togglePreviewLayout() {
+  const isList = previewLayoutBtn?.getAttribute('aria-pressed') !== 'true';
+  applyPreviewLayout(isList);
+  globalThis.SlideDownloaderLocalState?.writePreference('previewLayout', isList ? 'list' : 'grid');
+}
+
 /**
  * Pintar la cuadrícula de vista previa con las primeras diapositivas.
  */
@@ -327,7 +359,12 @@ function renderPreview(images, total) {
       figure.remove();
     });
 
-    figure.append(image);
+    const indexLabel = document.createElement('span');
+    indexLabel.className = 'preview-index';
+    indexLabel.setAttribute('aria-hidden', 'true');
+    indexLabel.textContent = String(index + 1);
+
+    figure.append(image, indexLabel);
     previewGrid.append(figure);
   });
 }
@@ -362,8 +399,9 @@ function isSamePresentation(a, b) {
 /**
  * Construir el cuerpo común de las descargas sincrónica y en background.
  */
-function buildDownloadPayload(url) {
+function buildDownloadPayload(url, { progressId = '' } = {}) {
   const payload = { url, format: currentFormat, quality: currentQuality };
+  if (progressId) payload.progressId = progressId;
 
   // Reutilizar las diapositivas ya detectadas evita la llamada lenta al
   // renderizador y reduce bastante el tiempo de descarga en HD.
@@ -386,6 +424,181 @@ function renderJobsOption() {
   actionNoteText.textContent = jobsEnabled
     ? 'Puedes descargar al instante o procesar en segundo plano para presentaciones grandes.'
     : 'Tu archivo se genera al instante y se descarga directamente.';
+}
+
+/** ID aleatorio de un solo uso para consultar el progreso sin exponer la URL. */
+function createProgressId() {
+  const webCrypto = globalThis.crypto;
+
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    return webCrypto.randomUUID();
+  }
+
+  // `randomUUID` solo está en contextos seguros; en HTTP local seguimos
+  // generando un UUID v4 con la misma API criptográfica del navegador.
+  if (webCrypto && typeof webCrypto.getRandomValues === 'function') {
+    const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  return '';
+}
+
+/** Etapas legibles, compartidas por la descarga instantánea y los trabajos. */
+function describeDownloadProgress(progress = {}) {
+  const stage = progress.stage || 'preparing';
+
+  if (stage === 'analyzing') return 'Analizando…';
+  if (stage === 'downloading-images') {
+    return progress.total
+      ? `Descargando ${progress.current || 0}/${progress.total}…`
+      : 'Descargando diapositivas…';
+  }
+  if (stage === 'generating-file') {
+    return `Generando ${String(progress.format || currentFormat).toUpperCase()}…`;
+  }
+  if (stage === 'done') return 'Preparando archivo…';
+  if (stage === 'failed') return 'No se pudo completar la descarga';
+  return 'Preparando descarga…';
+}
+
+/** Pintar la barra sin inyectar HTML y sin superar los límites del atributo. */
+function renderDownloadProgress(progress) {
+  if (!downloadProgress || !downloadProgressTrack || !downloadProgressBar || !downloadProgressText) return;
+
+  const percent = Math.min(Math.max(Number(progress.percent) || 0, 0), 100);
+  const message = describeDownloadProgress(progress);
+
+  downloadProgressBar.style.width = `${percent}%`;
+  downloadProgressTrack.setAttribute('aria-valuenow', String(Math.round(percent)));
+  downloadProgressText.textContent = progress.failed
+    ? `${message} · ${progress.failed} diapositivas omitidas`
+    : message;
+  statusText.textContent = message;
+}
+
+/** Sondeo best-effort: un 404 (otra instancia en Vercel) degrada a texto. */
+function startDownloadProgressPolling(id) {
+  stopDownloadProgressPolling();
+  if (!id || !downloadProgress) return;
+
+  activeProgressId = id;
+  downloadProgress.hidden = false;
+  renderDownloadProgress({ stage: 'preparing', percent: 5 });
+
+  const poll = async () => {
+    if (!activeProgressId) return;
+
+    try {
+      const response = await fetch(`/api/progress/${encodeURIComponent(activeProgressId)}`);
+
+      if (response.status === 404) {
+        activeProgressId = '';
+        downloadProgressText.textContent = 'Procesando descarga…';
+        return;
+      }
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+      if (data.success && data.progress && activeProgressId) {
+        renderDownloadProgress(data.progress);
+      }
+    } catch (error) {
+      // Un fallo puntual del sondeo no debe afectar a la descarga en curso.
+    }
+
+    if (activeProgressId) {
+      progressPollTimer = setTimeout(poll, PROGRESS_POLL_MS);
+    }
+  };
+
+  poll();
+}
+
+function stopDownloadProgressPolling() {
+  clearTimeout(progressPollTimer);
+  progressPollTimer = null;
+  activeProgressId = '';
+  if (downloadProgress) downloadProgress.hidden = true;
+}
+
+/** Dibujar el historial con nodos de texto: nunca con HTML del almacenamiento. */
+function renderRecentHistory(entries) {
+  if (!recentSection || !recentList) return;
+
+  const items = Array.isArray(entries)
+    ? entries
+    : (globalThis.SlideDownloaderLocalState?.readRecent() || []);
+
+  recentSection.hidden = items.length === 0;
+  recentList.textContent = '';
+
+  for (const entry of items) {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'recent-item';
+
+    const title = document.createElement('span');
+    title.className = 'recent-title';
+    title.textContent = entry.title || 'Presentación sin título';
+
+    const meta = document.createElement('span');
+    meta.className = 'recent-meta';
+    const quality = entry.quality === 'hd' ? 'HD' : 'SD';
+    const slides = entry.slideCount != null ? ` · ${entry.slideCount} diapositivas` : '';
+    meta.textContent = `${getFormatName(entry.format)} · ${quality}${slides}`;
+
+    button.append(title, meta);
+    button.addEventListener('click', () => restoreRecentEntry(entry));
+    item.append(button);
+    recentList.append(item);
+  }
+}
+
+function rememberDownload(metadata, fileName) {
+  const url = urlInput.value.trim() || lastInspect?.url || '';
+  if (!url) return;
+
+  const entries = globalThis.SlideDownloaderLocalState?.addRecent({
+    url,
+    title: metadata.title || lastInspect?.title || '',
+    format: metadata.format || currentFormat,
+    quality: metadata.quality || currentQuality,
+    slideCount: metadata.slideCount,
+    fileName
+  }) || [];
+
+  renderRecentHistory(entries);
+}
+
+function clearRecentHistory() {
+  globalThis.SlideDownloaderLocalState?.clearRecent();
+  renderRecentHistory([]);
+}
+
+function restoreRecentEntry(entry) {
+  urlInput.value = entry.url;
+  currentFormat = entry.format || currentFormat;
+  currentQuality = entry.quality || currentQuality;
+
+  const formatInput = document.querySelector(`input[name="format"][value="${currentFormat}"]`);
+  if (formatInput && !formatInput.disabled) formatInput.checked = true;
+
+  const qualityInput = document.querySelector(`input[name="quality"][value="${currentQuality}"]`);
+  if (qualityInput) qualityInput.checked = true;
+
+  clearPreview();
+  lastInspect = null;
+  lastInspectedUrl = '';
+  detectedSlideCount = null;
+  renderLimits();
+  inspectUrl(entry.url);
 }
 
 /**
@@ -421,10 +634,12 @@ async function handleDownload() {
     inspectController = null;
   }
 
-  const payload = buildDownloadPayload(url);
+  const progressId = createProgressId();
+  const payload = buildDownloadPayload(url, { progressId });
 
   showStatus('info', currentQuality === 'hd' ? 'Preparando descarga en HD...' : 'Preparando descarga...');
   setLoading(true);
+  startDownloadProgressPolling(progressId);
 
   try {
     const response = await fetch('/api/download', {
@@ -458,19 +673,34 @@ async function handleDownload() {
       `presentacion.${currentFormat}`
     );
 
-    showStatus('success', 'Descarga lista');
-    showDetail([
+    const failedSlides = Number(metadata.failedSlideCount) || 0;
+    const detailRows = [
       ['Título', metadata.title || lastInspect?.title || ''],
       ['Formato', getFormatName(metadata.format || currentFormat)],
       ['Calidad', getQualityName(metadata.quality || currentQuality)],
       ['Diapositivas', metadata.slideCount != null ? String(metadata.slideCount) : ''],
       ['Archivo', fileName],
-    ]);
+    ];
+
+    if (failedSlides > 0) {
+      detailRows.push([
+        'Avisos',
+        (metadata.warnings || []).join(' ') || `${failedSlides} diapositivas no incluidas en el archivo.`
+      ]);
+    }
+
+    showStatus(
+      failedSlides > 0 ? 'warning' : 'success',
+      failedSlides > 0 ? 'Descarga lista con avisos' : 'Descarga lista'
+    );
+    showDetail(detailRows);
+    rememberDownload(metadata, fileName);
   } catch (error) {
     showStatus('error', 'Error de conexión');
     showErrorMessage('No se pudo contactar con el servidor.');
     console.error('Error:', error);
   } finally {
+    stopDownloadProgressPolling();
     setLoading(false);
   }
 }
@@ -600,9 +830,11 @@ function pollJob({ startedAt, delay, failures }) {
 
       const job = data.job;
       if (job.status === 'queued' || job.status === 'running') {
+        const stageText = job.detail
+          || describeDownloadProgress({ stage: job.stage, format: currentFormat });
         jobProgress.textContent = job.status === 'queued'
           ? 'En cola…'
-          : `Procesando… ${numberFormatter.format(Number(job.progress) || 0)}%`;
+          : `${stageText} · ${numberFormatter.format(Number(job.progress) || 0)}%`;
         pollJob({
           startedAt,
           delay: nextPollDelay(data, delay),

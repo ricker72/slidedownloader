@@ -18,13 +18,15 @@ const {
   promptLimiter,
   fileLimiter,
   searchConfigLimiter,
-  pingLimiter
+  pingLimiter,
+  progressLimiter
 } = require('../middleware/rateLimiter');
 const { securityHeaders } = require('../middleware/securityHeaders');
 const { sendGeneratedFile, MIME_BY_EXTENSION } = require('../utils/fileResponse');
 const { isValidJobId, cleanupJobDir } = require('../utils/downloadJob');
 const { openPublicResponse, isBlockedHostname } = require('../utils/publicNetwork');
 const { generateDownload } = require('../services/downloadService');
+const { ProgressTracker } = require('../services/progressTracker');
 const { MemoryJobStore } = require('../services/jobStore');
 const { MemoryArtifactStore } = require('../services/artifactStore');
 const { createJobsRouter } = require('../api/jobs');
@@ -33,6 +35,7 @@ const { sendError, errorHandler } = require('../middleware/errorHandler');
 const { getRuntime } = require('../config');
 
 const app = express();
+const progressTracker = new ProgressTracker();
 
 // Valores de arranque: el puerto, el perfil y el modo worker no cambian en caliente.
 const {
@@ -641,9 +644,38 @@ app.post('/api/prompt', promptLimiter, async (req, res) => {
   }
 });
 
+app.get('/api/progress/:id', progressLimiter, (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidJobId(id)) {
+    return res.status(400).json({ success: false, error: 'ID de progreso inválido' });
+  }
+
+  const progress = progressTracker.get(id);
+  if (!progress) {
+    return res.status(404).json({ success: false, error: 'Progreso no encontrado' });
+  }
+
+  return res.json({ success: true, progress });
+});
+
 app.post('/api/download', downloadLimiter, async (req, res) => {
+  const body = req.body || {};
+  const progressId = isValidJobId(body.progressId) ? body.progressId : null;
+  const report = progressId
+    ? progressTracker.create(progressId, {
+      format: String(body.format || 'pdf').toLowerCase(),
+      quality: String(body.quality || 'sd').toLowerCase()
+    })
+    : null;
+
   try {
-    const result = await generateDownload(req.body, { getCachedInspection });
+    const result = await generateDownload(req.body, {
+      getCachedInspection,
+      onProgress: report
+    });
+
+    if (report) report({ stage: 'done' });
 
     // El archivo se envía en esta misma respuesta. Devolver una URL
     // `/download/{jobId}/...` fallaba en Vercel cuando la siguiente petición
@@ -657,9 +689,11 @@ app.post('/api/download', downloadLimiter, async (req, res) => {
       slideCount: result.imageCount,
       source: result.source,
       warnings: result.warnings,
+      failedSlideCount: result.failedSlideCount,
       onCleanup: () => cleanupJobDir(result.filePath)
     });
   } catch (error) {
+    if (report) report({ stage: 'failed' });
     // Los errores 4xx son peticiones inválidas; solo se registran los 5xx.
     // En producción se enmascaran los 5xx, como en la implementación original.
     return sendError(res, error, {
