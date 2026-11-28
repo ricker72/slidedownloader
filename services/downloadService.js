@@ -17,9 +17,23 @@ const { ERROR_CODES, DownloadValidationError } = require('./errors');
 const DOWNLOAD_QUALITIES = ['sd', 'hd'];
 
 /**
+ * Cuerpo admitido por `/api/download` (y por el worker en segundo plano).
+ * @typedef {object} DownloadRequest
+ * @property {string} [url] - Enlace de SlideShare.
+ * @property {string} [format] - pdf, pptx, ppsx, potx, docx, txt o md.
+ * @property {string} [quality] - sd o hd.
+ * @property {string[]} [imageUrls] - Diapositivas devueltas por `/api/inspect`.
+ * @property {string} [title] - Título detectado por la vista previa.
+ * @property {string} [progressId] - UUID para sondear `/api/progress/:id`.
+ */
+
+/**
  * Valida y normaliza el cuerpo de una petición de descarga.
  * Lanza `DownloadValidationError` con los mismos mensajes y códigos que
  * usaba anteriormente el controlador de `/api/download`.
+ *
+ * @param {DownloadRequest} [body]
+ * @returns {DownloadRequest}
  */
 function validateDownloadRequest(body) {
   const { url, format, quality, imageUrls, title } = body || {};

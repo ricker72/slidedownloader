@@ -113,6 +113,10 @@ async function looksLikeTextOrDiagram(buffer) {
  * (habitual en la variante de 2048 px), se convierte a PNG sin pérdida si el
  * contenido parece texto/diagrama, o a JPEG con la calidad configurada.
  * `options` permite ajustar la conversión sin depender de variables de entorno.
+ *
+ * @param {Buffer} buffer
+ * @param {{jpegQuality?: number|string, conversion?: string, pngMaxBytes?: number|string}} [options]
+ * @returns {Promise<{buffer: Buffer, mime: string|null}>}
  */
 async function normalizeImageBuffer(buffer, options = {}) {
   const mime = detectImageMime(buffer);

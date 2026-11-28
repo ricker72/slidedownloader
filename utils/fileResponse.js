@@ -29,8 +29,23 @@ function encodeHeader(value) {
 }
 
 /**
+ * @typedef {object} DownloadMetadata
+ * @property {string} [fileName]
+ * @property {string} [title]
+ * @property {string} [format]
+ * @property {string} [quality]
+ * @property {number} [slideCount]
+ * @property {number} [totalPages]
+ * @property {string} [source]
+ * @property {string[]} [warnings]
+ * @property {number} [failedSlideCount]
+ */
+
+/**
  * Cabeceras con la información que la interfaz muestra tras la descarga.
  * Los valores no ASCII se codifican para no romper las cabeceras HTTP.
+ *
+ * @param {DownloadMetadata} [metadata]
  */
 function buildDownloadHeaders({
   fileName,
@@ -66,9 +81,9 @@ function buildDownloadHeaders({
  * Envía un archivo ya generado al cliente y limpia el trabajo al terminar.
  *
  * @param {import('express').Response} res
- * @param {object} options
- * @param {string} options.filePath - Ruta absoluta del archivo generado.
- * @param {string} options.fileName - Nombre que verá el usuario.
+ * @param {object} [options]
+ * @param {string} [options.filePath] - Ruta absoluta del archivo generado.
+ * @param {string} [options.fileName] - Nombre que verá el usuario.
  * @param {Function} [options.onCleanup] - Se ejecuta al cerrar la respuesta.
  * @returns {void}
  */

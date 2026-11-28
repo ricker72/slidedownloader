@@ -30,6 +30,7 @@ test('el workflow usa acciones oficiales, caché npm y matriz de Node', () => {
 test('el workflow instala, verifica y ejecuta la suite completa', () => {
   const commands = [
     'npm ci',
+    'npm run typecheck',
     'node --check server/app.js',
     'node --check public/app.js',
     'git diff --check',
@@ -39,6 +40,11 @@ test('el workflow instala, verifica y ejecuta la suite completa', () => {
   for (const command of commands) {
     assert.ok(workflow.includes(command), `falta el paso: ${command}`);
   }
+
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')
+  );
+  assert.equal(packageJson.scripts.typecheck, 'tsc --noEmit -p jsconfig.json');
 
   assert.match(workflow, /github\.event\.pull_request\.base\.sha/);
   assert.match(workflow, /run: npm test\s*$/m);

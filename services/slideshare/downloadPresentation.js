@@ -25,6 +25,39 @@ const { buildPresentationFileFromImages } = require('./documents');
 const { createOcrEngine } = require('../ocrService');
 const { TEXT_FORMATS, createTextExportFile } = require('../textExportService');
 
+/**
+ * Datos mínimos de una vista previa ya inspeccionada.
+ * @typedef {object} PresentationInfo
+ * @property {string} [title] - Título limpio de la presentación.
+ * @property {string[]} [imageUrls] - Diapositivas detectadas.
+ * @property {string} [description] - Descripción pública.
+ * @property {string} [author] - Autor declarado en la página.
+ */
+
+/**
+ * Resultado observable de una descarga generada en el momento.
+ * @typedef {object} DownloadResult
+ * @property {boolean} success
+ * @property {string} jobId
+ * @property {string} title
+ * @property {string} format
+ * @property {string} quality
+ * @property {string} source - `preview`, `renderer` o `metadata`.
+ * @property {number} imageCount
+ * @property {string} fileName
+ * @property {string} filePath
+ * @property {string[]} warnings
+ * @property {number} failedSlideCount
+ * @property {string} downloadUrl - Conservado por compatibilidad.
+ */
+
+/**
+ * @param {string} url
+ * @param {string} [format]
+ * @param {string} [quality]
+ * @param {{imageUrls?: string[], title?: string, author?: string, onProgress?: Function}} [options]
+ * @returns {Promise<DownloadResult>}
+ */
 async function downloadPresentation(url, format = 'pdf', quality = 'sd', options = {}) {
   const normalizedUrl = normalizeSlideShareUrl(url);
   if (!normalizedUrl) {
@@ -51,6 +84,7 @@ async function downloadPresentation(url, format = 'pdf', quality = 'sd', options
   // El progreso público nunca incluye URLs: solo etapas y contadores.
   const upstreamProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
   const failedImages = [];
+  /** @param {{failedUrl?: string, [key: string]: any}} [update] */
   const reportProgress = (update = {}) => {
     const { failedUrl, ...safe } = update;
 

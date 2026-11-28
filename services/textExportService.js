@@ -58,6 +58,12 @@ function normalizeWarnings(raw) {
   return warnings;
 }
 
+/**
+ * @param {any[]} slideTexts
+ * @param {boolean} markdown
+ * @param {number|string} [slideCount]
+ * @returns {{slide: number, body: string}[]}
+ */
 function buildSlideBlocks(slideTexts, markdown, slideCount = 0) {
   const items = (Array.isArray(slideTexts) ? slideTexts : []).slice(0, MAX_SLIDE_BLOCKS);
   const bySlide = new Map();
@@ -74,7 +80,7 @@ function buildSlideBlocks(slideTexts, markdown, slideCount = 0) {
     bySlide.set(slide, body);
   });
 
-  const detected = Math.max(0, Number.parseInt(slideCount, 10) || 0);
+  const detected = Math.max(0, Number.parseInt(/** @type {string} */ (slideCount), 10) || 0);
   const total = Math.min(MAX_SLIDE_BLOCKS, Math.max(detected, bySlide.size));
   const blocks = [];
 
@@ -94,7 +100,7 @@ function buildTextExport(input = {}) {
   const format = String(input.format || 'txt').toLowerCase();
 
   if (!TEXT_FORMATS.includes(format)) {
-    const error = new Error(`Formato de texto no soportado: ${format}`);
+    const error = /** @type {Error & {status: number}} */ (new Error(`Formato de texto no soportado: ${format}`));
     error.status = 400;
     throw error;
   }
@@ -178,7 +184,7 @@ async function createTextExportFile(input = {}, outputDir, deps = {}) {
   const format = String(input.format || 'txt').toLowerCase();
 
   if (!TEXT_FORMATS.includes(format)) {
-    const error = new Error(`Formato de texto no soportado: ${format}`);
+    const error = /** @type {Error & {status: number}} */ (new Error(`Formato de texto no soportado: ${format}`));
     error.status = 400;
     throw error;
   }

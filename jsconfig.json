@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": false,
+    "skipLibCheck": true,
+    "maxNodeModuleJsDepth": 0,
+    "types": ["node"]
+  },
+  "exclude": ["node_modules", "tests", "downloads"],
+  "include": [
+    "services/slideshare/documents.js",
+    "services/slideshare/downloadPresentation.js",
+    "services/downloadService.js",
+    "services/textExportService.js",
+    "utils/fileResponse.js"
+  ]
+}

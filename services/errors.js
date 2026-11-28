@@ -26,14 +26,25 @@ function isCatalogCode(code) {
   return CATALOG_CODES.has(code);
 }
 
+/**
+ * @param {string} message
+ * @param {number} status
+ * @param {string} [code]
+ * @returns {Error & {status: number, code?: string}}
+ */
 function createServiceError(message, status, code) {
-  const error = new Error(message);
+  const error = /** @type {Error & {status: number, code?: string}} */ (new Error(message));
   error.status = status;
   if (code) error.code = code;
   return error;
 }
 
 class DownloadValidationError extends Error {
+  /**
+   * @param {string} message
+   * @param {number} [status]
+   * @param {string} [code]
+   */
   constructor(message, status = 400, code = ERROR_CODES.DOWNLOAD_VALIDATION) {
     super(message);
     this.name = 'DownloadValidationError';

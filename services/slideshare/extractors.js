@@ -1,5 +1,6 @@
 let chromium;
 try {
+  // @ts-ignore - Playwright es opcional y no figura en las dependencias del repo.
   chromium = require('playwright').chromium;
 } catch (error) {
   chromium = null;
@@ -9,7 +10,7 @@ const { ERROR_CODES } = require('../errors');
 const { dedupeUrls, isLikelyImageUrl } = require('./slideUtils');
 
 function rendererError(message) {
-  const error = new Error(message);
+  const error = /** @type {Error & {code: string}} */ (new Error(message));
   error.code = ERROR_CODES.RENDERER_UNAVAILABLE;
   return error;
 }
@@ -58,6 +59,7 @@ async function extractPresentationInfo(url) {
 
       const imageSet = new Set();
       for (const img of document.querySelectorAll('img, source')) {
+        // @ts-ignore - el DOM evaluado en Playwright se tipa como Element genérico.
         addValue(imageSet, img.currentSrc || img.src || img.dataset.src || img.dataset.original || img.getAttribute('data-full'));
         addValue(imageSet, img.getAttribute('srcset')?.split(',')[0]?.trim().split(/\s+/)[0]);
       }
@@ -75,6 +77,7 @@ async function extractPresentationInfo(url) {
         addValue(imageSet, match);
       }
 
+      // @ts-ignore - meta es un Element genérico en el tipado DOM de TS.
       const title = document.title || document.querySelector('meta[property="og:title"]')?.content || document.querySelector('meta[name="twitter:title"]')?.content || 'Presentación';
       const readMeta = (selector) => document.querySelector(selector)?.getAttribute('content')?.trim() || '';
 

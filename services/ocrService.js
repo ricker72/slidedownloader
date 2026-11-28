@@ -45,14 +45,15 @@ function withTimeout(promise, timeoutMs, stage) {
 }
 
 /**
- * @param {object} options
- * @param {boolean} options.enabled - solo true activa el OCR.
- * @param {Function} options.downloadImage - (url, quality) => Promise<Buffer>.
+ * @param {object} [options]
+ * @param {boolean} [options.enabled] - solo true activa el OCR.
+ * @param {Function} [options.downloadImage] - (url, quality) => Promise<Buffer>.
  * @param {string} [options.lang] - código de idioma de Tesseract.
  * @param {number|string} [options.maxSlides] - tope de diapositivas (1-50).
  * @param {number|string} [options.timeoutMs] - timeout por diapositiva.
  * @param {string} [options.cacheDir] - directorio local del modelo descargado.
  * @param {Function} [options.createWorker] - inyección para pruebas.
+ * @param {string} [options.quality] - calidad de las imágenes a reconocer ('sd' o 'hd').
  */
 function createOcrEngine(options = {}) {
   const enabled = options.enabled === true;

@@ -14,6 +14,23 @@ const {
   fitImageWithinBox
 } = require('./imageDownload');
 
+/**
+ * Imagen lista para incrustar, con dimensiones resueltas por sharp.
+ * @typedef {object} SlideImage
+ * @property {string} url - URL de origen (solo para avisos).
+ * @property {Buffer} buffer - Bytes normalizados a PNG/JPEG.
+ * @property {string|null} mime - MIME detectado.
+ * @property {number|null} width - Ancho en píxeles, si se pudo leer.
+ * @property {number|null} height - Alto en píxeles, si se pudo leer.
+ */
+
+/**
+ * Resultado común de los generadores de archivos.
+ * @typedef {object} GeneratedFile
+ * @property {string} outputFile - Ruta absoluta escrita en el directorio del trabajo.
+ * @property {string} filename - Nombre público del archivo.
+ */
+
 const PPTX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml';
 const PPTX_VARIANTS = {
@@ -72,7 +89,9 @@ const PPTX_IMAGE_BOX = { x: 0.5, y: 0.8, w: 12.33, h: 6.5 };
 const DOCX_IMAGE_BOX = { x: 0, y: 0, w: 500, h: 300 };
 
 async function createPptxFromImages(imageUrls, outputPath, title, quality = 'sd', onProgress = null) {
-  const pptx = new PptxGenJS();
+  // pptxgenjs publica tipos con una forma de export que TS interpreta como
+  // módulo; el constructor real es el valor por defecto en CommonJS.
+  const pptx = new (/** @type {any} */ (PptxGenJS))();
   pptx.layout = 'LAYOUT_WIDE';
   pptx.author = 'SlideDownloader';
   pptx.company = 'SlideDownloader';
@@ -159,13 +178,13 @@ async function createDocxFromImages(imageUrls, outputPath, title, quality = 'sd'
     children.push(new Paragraph({ text: `Slide ${index + 1}`, heading: HeadingLevel.HEADING_2, spacing: { before: 120, after: 120 } }));
     children.push(new Paragraph({
       children: [
-        new ImageRun({
+        new ImageRun(/** @type {any} */ ({
           data: item.buffer,
           transformation: {
             width: Math.max(1, Math.round(placement.w)),
             height: Math.max(1, Math.round(placement.h))
           }
-        })
+        }))
       ],
       spacing: { after: 200 }
     }));
@@ -214,6 +233,15 @@ async function convertPptxToVariant(pptxPath, outputPath, variant) {
   fs.writeFileSync(outputPath, buffer);
 }
 
+/**
+ * @param {string[]} imageUrls
+ * @param {string} format
+ * @param {string} outputDir
+ * @param {string} title
+ * @param {string} [quality] - `sd` o `hd`.
+ * @param {Function|null} [onProgress]
+ * @returns {Promise<GeneratedFile>}
+ */
 async function buildPresentationFileFromImages(imageUrls, format, outputDir, title, quality = 'sd', onProgress = null) {
   const extension = String(format || 'pdf').toLowerCase();
 

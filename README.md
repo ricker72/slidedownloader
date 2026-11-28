@@ -234,12 +234,13 @@ El proyecto está escrito principalmente en **JavaScript (ES6+)** para tanto el 
 
 ## ✅ Integración continua
 
-Cada pull request ejecuta `.github/workflows/tests.yml` en Node 18, 20, 22 y 24. El workflow instala con `npm ci`, comprueba la sintaxis de `server/app.js` y `public/app.js`, valida el whitespace del diff y corre la suite con `npm test`. No usa secretos ni despliega.
+Cada pull request ejecuta `.github/workflows/tests.yml` en Node 18, 20, 22 y 24. El workflow instala con `npm ci`, verifica los tipos con `npm run typecheck` (`tsc --noEmit` sobre el JSDoc de los servicios de generación), comprueba la sintaxis de `server/app.js` y `public/app.js`, valida el whitespace del diff y corre la suite con `npm test`. No usa secretos ni despliega.
 
 Para reproducirlo en local:
 
 ```bash
 npm ci
+npm run typecheck
 node --check server/app.js
 node --check public/app.js
 git diff --check
