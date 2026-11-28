@@ -15,8 +15,34 @@ test('la portada ofrece los formatos de texto y actualiza el contador', () => {
   assert.match(homeHtml, /value="md"/);
   assert.match(homeHtml, /7 formatos disponibles/);
   assert.match(homeHtml, /<symbol id="i-txt"/);
+  assert.match(homeHtml, /<symbol id="i-md"/);
+  assert.match(homeHtml, /style\.css\?v=25/);
   assert.match(appJs, /txt: 'Solo texto \(TXT\)'/);
   assert.match(appJs, /md: 'Markdown \(MD\)'/);
+});
+
+test('cada formato de texto usa su propio icono', () => {
+  assert.match(homeHtml, /value="txt"[\s\S]{0,200}format-icon--txt[\s\S]{0,120}href="#i-txt"/);
+  assert.match(homeHtml, /value="md"[\s\S]{0,200}format-icon--md[\s\S]{0,120}href="#i-md"/);
+  assert.doesNotMatch(homeHtml, /value="md"[\s\S]{0,240}href="#i-txt"/);
+});
+
+test('los iconos de TXT y MD tienen fondo propio y visible', () => {
+  assert.match(
+    styleCss,
+    /\.format-icon--txt \{\s*\n\s*background: linear-gradient\(145deg, #94a3b8 0%, #475569 100%\);\s*\n\}/
+  );
+  assert.match(
+    styleCss,
+    /\.format-icon--md \{\s*\n\s*background: linear-gradient\(145deg, #a5b4fc 0%, #4338ca 100%\);\s*\n\}/
+  );
+
+  const iconsStart = styleCss.indexOf('/* Iconos de formato */');
+  const txtStart = styleCss.indexOf('.format-icon--txt {');
+  const mdStart = styleCss.indexOf('.format-icon--md {');
+  const textStart = styleCss.indexOf('.format-text {');
+
+  assert.ok(iconsStart < txtStart && txtStart < mdStart && mdStart < textStart);
 });
 
 test('el asistente muestra el resumen estructurado en su propio panel', () => {
