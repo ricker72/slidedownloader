@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar sintaxis del servidor
+        run: node --check server/app.js
+
+      - name: Verificar sintaxis de la interfaz
+        run: node --check public/app.js
+
+      - name: Comprobar whitespace del diff
+        run: git diff --check ${{ github.event.pull_request.base.sha }} HEAD
+
+      - name: Ejecutar tests
+        run: npm test

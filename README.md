@@ -22,6 +22,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/ricker72/SlideDownloader?style=flat-square)](https://github.com/ricker72/SlideDownloader/issues)
 [![GitHub License](https://img.shields.io/github/license/ricker72/SlideDownloader?style=flat-square)](https://github.com/ricker72/SlideDownloader/blob/main/LICENSE)
 [![GitHub Last Commit](https://img.shields.io/github/last-commit/ricker72/SlideDownloader?style=flat-square)](https://github.com/ricker72/SlideDownloader/commits/main)
+[![Tests](https://github.com/ricker72/slidedownloader/actions/workflows/tests.yml/badge.svg)](https://github.com/ricker72/slidedownloader/actions/workflows/tests.yml)
 
 </div>
 
@@ -228,6 +229,22 @@ El proyecto está escrito principalmente en **JavaScript (ES6+)** para tanto el 
 - **Frontend:** HTML5, CSS3, JavaScript vanilla
 - **Backend:** Node.js + Express.js
 - **Renderizador externo:** Node.js + Puppeteer (Chromium)
+
+---
+
+## ✅ Integración continua
+
+Cada pull request ejecuta `.github/workflows/tests.yml` en Node 18, 20, 22 y 24. El workflow instala con `npm ci`, comprueba la sintaxis de `server/app.js` y `public/app.js`, valida el whitespace del diff y corre la suite con `npm test`. No usa secretos ni despliega.
+
+Para reproducirlo en local:
+
+```bash
+npm ci
+node --check server/app.js
+node --check public/app.js
+git diff --check
+npm test
+```
 
 ---
 
