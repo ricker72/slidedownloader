@@ -59,6 +59,8 @@ El proyecto está enfocado en brindar a usuarios, estudiantes, docentes y profes
 | 🌍 **Multilenguaje** | Español, Inglés y Portugués | ✅ Disponible |
 | 🔒 **Seguridad** | Validación de URL y protección contra path traversal | ✅ Disponible |
 
+El **PPTX** generado se puede abrir directamente en **Google Slides** y en **Keynote**: es el mismo archivo, sin conversión intermedia. No se genera un `.key` nativo ni se sube el archivo a Google Drive.
+
 ---
 
 ## 🤖 Skills para agentes de IA

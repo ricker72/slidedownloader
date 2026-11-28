@@ -16,7 +16,7 @@ test('la portada ofrece los formatos de texto y actualiza el contador', () => {
   assert.match(homeHtml, /7 formatos disponibles/);
   assert.match(homeHtml, /<symbol id="i-txt"/);
   assert.match(homeHtml, /<symbol id="i-md"/);
-  assert.match(homeHtml, /style\.css\?v=25/);
+  assert.match(homeHtml, /style\.css\?v=26/);
   assert.match(appJs, /txt: 'Solo texto \(TXT\)'/);
   assert.match(appJs, /md: 'Markdown \(MD\)'/);
 });
